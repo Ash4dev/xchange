@@ -3,6 +3,9 @@
 
 #include <unordered_map>
 
+Level::Level(Price price, Quantity quantity)
+    : m_price{price}, m_quantity{quantity}, m_orderList{} {}
+
 void Level::AddOrder(Order &order) {
   assert(m_price == order.getPrice());
 
@@ -34,6 +37,10 @@ void Level::CancelOrder(OrderID orderID) {
 void Level::ModifyOrder(OrderID oldOrderID, Order &ModifiedOrder) {
   CancelOrder(oldOrderID);
   AddOrder(ModifiedOrder);
+}
+
+void Level::UpdateLevelQuantityPostMatch(Quantity filledQuantity) {
+  m_quantity -= filledQuantity;
 }
 
 void Level::removeMatchedOrder(OrderID orderID) {

@@ -10,6 +10,7 @@
 
 class Order {
 public:
+  Order() = default;
   Order(OrderType::OrderType orderType, Side::Side side, Price price,
         Quantity quantity)
       : m_orderType{orderType}, m_side{side}, m_price{price},
@@ -25,7 +26,7 @@ public:
         m_price{other.getPrice()}, m_remQuantity{other.getRemainingQuantity()},
         m_orderID{other.getOrderID()} {}
 
-  void FillPartially(int quantity) {
+  void FillPartially(Quantity quantity) {
     assert(quantity <= m_remQuantity);
     m_remQuantity -= quantity;
   }

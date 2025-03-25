@@ -17,13 +17,20 @@ private:
   std::map<Price, Level, std::greater<Price>> m_bids;
   std::map<Price, Level, std::less<Price>> m_asks;
 
-  bool CanMatchOrder(Side::Side side, Price price) const;
-  std::optional<Trade> MatchPotentialOrders();
+public:
+  OrderBook() = default;
 
   void AddOrder(Order &order);
   void CancelOrder(Order &order);
   void ModifyOrder(Order &oldOrder, Order &modifiedOrder);
 
-public:
-  OrderBook() {};
+  bool CanMatchOrder(Side::Side side, Price price) const;
+  std::optional<Trade> MatchPotentialOrders();
+
+  std::map<Price, Level, std::greater<Price>> getBidLevels() const {
+    return m_bids;
+  };
+  std::map<Price, Level, std::less<Price>> getAskLevels() const {
+    return m_asks;
+  };
 };

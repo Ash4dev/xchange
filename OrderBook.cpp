@@ -6,7 +6,9 @@
 #include "utils/enums/Side.h"
 
 #include <cassert>
+#include <iostream>
 #include <optional>
+#include <ostream>
 
 void OrderBook::AddOrder(Order &order) {
   Price price = order.getPrice();
@@ -67,7 +69,7 @@ bool OrderBook::CanMatchOrder(Side::Side side, Price price) const {
 // https://www.learncpp.com/cpp-tutorial/stdoptional/
 std::optional<Trade> OrderBook::MatchPotentialOrders() {
 
-  if (!(m_bids.empty() || m_asks.empty())) {
+  if ((m_bids.empty() || m_asks.empty())) {
     return std::nullopt;
   }
 
@@ -88,14 +90,30 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
 
   bestBidOrder->FillPartially(filledQuantity);
   bestAskOrder->FillPartially(filledQuantity);
+  bestBidLevel.UpdateLevelQuantityPostMatch(filledQuantity);
+  bestAskLevel.UpdateLevelQuantityPostMatch(filledQuantity);
+  std::cout << "bid: " << bestBidLevel.getPrice() << " "
+            << bestBidLevel.getQuantity() << " ask: " << bestAskLevel.getPrice()
+            << " " << bestAskLevel.getQuantity() << std::endl;
 
   if (bestBidOrder->isFullyFilled()) {
     OrderID bidOrderID = bestBidOrder->getOrderID();
-    bestBidLevel.removeMatchedOrder(bestBidOrder->getOrderID());
+    bestBidLevel.removeMatchedOrder(bidOrderID);
+    std::cout << "Yo BID!" << std::endl;
+    if (m_bids[bestBidLevel.getPrice()].getOrderList().empty()) {
+      std::cout << "Delete BidLevel!" << std::endl;
+      m_bids.erase(bestBidLevel.getPrice());
+    }
   }
   if (bestAskOrder->isFullyFilled()) {
     OrderID askOrderID = bestAskOrder->getOrderID();
     bestAskLevel.removeMatchedOrder(askOrderID);
+    std::cout << "Yo ASK!" << std::endl;
+    std::cout << m_asks[bestAskLevel.getPrice()].getQuantity() << std::endl;
+    if (m_asks[bestAskLevel.getPrice()].getOrderList().empty()) {
+      std::cout << "Delete AskLevel!" << std::endl;
+      m_asks.erase(bestAskLevel.getPrice());
+    }
   }
 
   OrderTraded bidTrade{bestBidOrder->getOrderID(), settlementPrice,

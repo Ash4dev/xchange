@@ -18,13 +18,16 @@ public:
     OrderList::iterator orderListIterator{};
   };
 
-  Level(Price price, Quantity quantity)
-      : m_price{price}, m_quantity{quantity}, m_orderList{} {}
+  Level() = default;
+  Level(Price price, Quantity quantity);
+  //  Level(Price price, Quantity quantity)
+  //    : m_price{price}, m_quantity{quantity}, m_orderList{} {}
 
   void AddOrder(Order &order);
   void CancelOrder(OrderID orderID);
   void ModifyOrder(OrderID oldOrderID, Order &ModifiedOrder);
 
+  void UpdateLevelQuantityPostMatch(Quantity filledQuantity);
   void removeMatchedOrder(OrderID orderID);
 
   Price getPrice() const { return m_price; }
