@@ -2,13 +2,13 @@
 #include "Level.h"
 #include "Trade.h"
 #include "utils/alias/Fundamental.h"
+#include "utils/alias/LevelRel.h"
 #include "utils/alias/OrderRel.h"
 #include "utils/enums/Side.h"
 
 #include <cassert>
-#include <iostream>
+#include <memory>
 #include <optional>
-#include <ostream>
 
 void OrderBook::AddOrder(Order &order) {
   Price price = order.getPrice();
@@ -17,15 +17,17 @@ void OrderBook::AddOrder(Order &order) {
   if (side == Side::Side::Buy) {
     if (m_bids.find(price) == m_bids.end()) {
       Level newBidLevel = Level(price, 0);
-      m_bids[price] = newBidLevel;
+      LevelPointer newBidLevelPointer = std::make_shared<Level>(newBidLevel);
+      m_bids[price] = newBidLevelPointer;
     }
-    m_bids[price].AddOrder(order);
+    m_bids[price]->AddOrder(order);
   } else {
     if (m_asks.find(price) == m_asks.end()) {
       Level newAskLevel = Level(price, 0);
-      m_asks[price] = newAskLevel;
+      LevelPointer newAskLevelPointer = std::make_shared<Level>(newAskLevel);
+      m_asks[price] = newAskLevelPointer;
     }
-    m_asks[price].AddOrder(order);
+    m_asks[price]->AddOrder(order);
   }
 }
 
@@ -35,12 +37,12 @@ void OrderBook::CancelOrder(Order &order) {
   OrderID orderID = order.getOrderID();
 
   if (side == Side::Side::Buy) {
-    m_bids[price].CancelOrder(orderID);
-    if (m_bids[price].getQuantity() == 0)
+    m_bids[price]->CancelOrder(orderID);
+    if (m_bids[price]->getQuantity() == 0)
       m_bids.erase(price);
   } else {
-    m_asks[price].CancelOrder(orderID);
-    if (m_asks[price].getQuantity() == 0)
+    m_asks[price]->CancelOrder(orderID);
+    if (m_asks[price]->getQuantity() == 0)
       m_asks.erase(price);
   }
 }
@@ -56,13 +58,13 @@ bool OrderBook::CanMatchOrder(Side::Side side, Price price) const {
   if (side == Side::Side::Buy) {
     if (m_asks.empty())
       return false;
-    Level bestAskLevel = (*m_asks.begin()).second;
-    return (price >= bestAskLevel.getPrice());
+    LevelPointer bestAskLevelPointer = (*m_asks.begin()).second;
+    return (price >= bestAskLevelPointer->getPrice());
   } else {
     if (m_bids.empty())
       return false;
-    Level bestBidLevel = (*m_bids.begin()).second;
-    return (price <= bestBidLevel.getPrice());
+    LevelPointer bestBidLevelPointer = (*m_bids.begin()).second;
+    return (price <= bestBidLevelPointer->getPrice());
   }
 }
 
@@ -73,46 +75,40 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
     return std::nullopt;
   }
 
-  Level bestBidLevel = (*m_bids.begin()).second;
-  Level bestAskLevel = (*m_asks.begin()).second;
+  LevelPointer bestBidLevelPointer = (*m_bids.begin()).second;
+  LevelPointer bestAskLevelPointer = (*m_asks.begin()).second;
 
-  if (bestBidLevel.getPrice() < bestAskLevel.getPrice()) {
+  if (bestBidLevelPointer->getPrice() < bestAskLevelPointer->getPrice()) {
     return std::nullopt;
   }
 
-  OrderPointer bestBidOrder = bestBidLevel.getOrderList().front();
-  OrderPointer bestAskOrder = bestAskLevel.getOrderList().front();
+  OrderPointer bestBidOrder = bestBidLevelPointer->getOrderList().front();
+  OrderPointer bestAskOrder = bestAskLevelPointer->getOrderList().front();
 
   Quantity filledQuantity = std::min(bestBidOrder->getRemainingQuantity(),
                                      bestAskOrder->getRemainingQuantity());
 
-  Price settlementPrice = bestAskLevel.getPrice();
+  Price settlementPrice = bestAskLevelPointer->getPrice();
 
   bestBidOrder->FillPartially(filledQuantity);
   bestAskOrder->FillPartially(filledQuantity);
-  bestBidLevel.UpdateLevelQuantityPostMatch(filledQuantity);
-  bestAskLevel.UpdateLevelQuantityPostMatch(filledQuantity);
-  std::cout << "bid: " << bestBidLevel.getPrice() << " "
-            << bestBidLevel.getQuantity() << " ask: " << bestAskLevel.getPrice()
-            << " " << bestAskLevel.getQuantity() << std::endl;
+  bestBidLevelPointer->UpdateLevelQuantityPostMatch(filledQuantity);
+  bestAskLevelPointer->UpdateLevelQuantityPostMatch(filledQuantity);
 
   if (bestBidOrder->isFullyFilled()) {
     OrderID bidOrderID = bestBidOrder->getOrderID();
-    bestBidLevel.removeMatchedOrder(bidOrderID);
-    std::cout << "Yo BID!" << std::endl;
-    if (m_bids[bestBidLevel.getPrice()].getOrderList().empty()) {
-      std::cout << "Delete BidLevel!" << std::endl;
-      m_bids.erase(bestBidLevel.getPrice());
+    bestBidLevelPointer->removeMatchedOrder(bidOrderID);
+    //    if (bestAskLevelPointer->getOrderList().empty())  equivalent condition
+    //    for level deletion
+    if (bestAskLevelPointer->getQuantity() == 0) {
+      m_bids.erase(bestBidLevelPointer->getPrice());
     }
   }
   if (bestAskOrder->isFullyFilled()) {
     OrderID askOrderID = bestAskOrder->getOrderID();
-    bestAskLevel.removeMatchedOrder(askOrderID);
-    std::cout << "Yo ASK!" << std::endl;
-    std::cout << m_asks[bestAskLevel.getPrice()].getQuantity() << std::endl;
-    if (m_asks[bestAskLevel.getPrice()].getOrderList().empty()) {
-      std::cout << "Delete AskLevel!" << std::endl;
-      m_asks.erase(bestAskLevel.getPrice());
+    bestAskLevelPointer->removeMatchedOrder(askOrderID);
+    if (bestAskLevelPointer->getQuantity() == 0) {
+      m_asks.erase(bestAskLevelPointer->getPrice());
     }
   }
 
