@@ -1,0 +1,11 @@
+Header Guards:
+- #pragma once: modern alternative for header guards (no redefine)
+  - https://stackoverflow.com/a/5777009
+
+Enums:
+- data type with fixed symbolic constants
+  - https://www.learncpp.com/cpp-tutorial/unscoped-enumerations/
+
+Classes:
+- const member fns can't change value of data members
+    - append const after function name
