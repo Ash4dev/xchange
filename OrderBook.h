@@ -21,9 +21,9 @@ private:
 public:
   OrderBook() = default;
 
-  void AddOrder(Order &order);
-  void CancelOrder(Order &order);
-  void ModifyOrder(Order &oldOrder, Order &modifiedOrder);
+  std::optional<Trade> AddOrder(Order &order);
+  std::optional<Trade> CancelOrder(Order &order);
+  std::optional<Trade> ModifyOrder(Order &oldOrder, Order &modifiedOrder);
 
   bool CanMatchOrder(Side::Side side, Price price) const;
   std::optional<Trade> MatchPotentialOrders();

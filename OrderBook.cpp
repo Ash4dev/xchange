@@ -10,7 +10,7 @@
 #include <memory>
 #include <optional>
 
-void OrderBook::AddOrder(Order &order) {
+std::optional<Trade> OrderBook::AddOrder(Order &order) {
   Price price = order.getPrice();
   Side::Side side = order.getSide();
 
@@ -29,9 +29,10 @@ void OrderBook::AddOrder(Order &order) {
     }
     m_asks[price]->AddOrder(order);
   }
+  return OrderBook::MatchPotentialOrders();
 }
 
-void OrderBook::CancelOrder(Order &order) {
+std::optional<Trade> OrderBook::CancelOrder(Order &order) {
   Price price = order.getPrice();
   Side::Side side = order.getSide();
   OrderID orderID = order.getOrderID();
@@ -45,11 +46,13 @@ void OrderBook::CancelOrder(Order &order) {
     if (m_asks[price]->getQuantity() == 0)
       m_asks.erase(price);
   }
+  return std::nullopt;
 }
 
-void OrderBook::ModifyOrder(Order &oldOrder, Order &modifiedOrder) {
+std::optional<Trade> OrderBook::ModifyOrder(Order &oldOrder,
+                                            Order &modifiedOrder) {
   OrderBook::CancelOrder(oldOrder);
-  OrderBook::AddOrder(modifiedOrder);
+  return OrderBook::AddOrder(modifiedOrder);
 }
 
 bool OrderBook::CanMatchOrder(Side::Side side, Price price) const {
