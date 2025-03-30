@@ -11,19 +11,23 @@
 #include <optional>
 
 std::optional<Trade> OrderBook::AddOrder(Order &order) {
+  if (order.getSymbol() != m_symbol) {
+    return std::nullopt;
+  }
+
   Price price = order.getPrice();
   Side::Side side = order.getSide();
 
   if (side == Side::Side::Buy) {
     if (m_bids.find(price) == m_bids.end()) {
-      Level newBidLevel = Level(price, 0);
+      Level newBidLevel = Level(m_symbol, price, 0);
       LevelPointer newBidLevelPointer = std::make_shared<Level>(newBidLevel);
       m_bids[price] = newBidLevelPointer;
     }
     m_bids[price]->AddOrder(order);
   } else {
     if (m_asks.find(price) == m_asks.end()) {
-      Level newAskLevel = Level(price, 0);
+      Level newAskLevel = Level(m_symbol, price, 0);
       LevelPointer newAskLevelPointer = std::make_shared<Level>(newAskLevel);
       m_asks[price] = newAskLevelPointer;
     }

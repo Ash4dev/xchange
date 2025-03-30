@@ -19,7 +19,7 @@ public:
   };
 
   Level() = default;
-  Level(Price price, Quantity quantity);
+  Level(Symbol Symbol, Price price, Quantity quantity);
   //  Level(Price price, Quantity quantity)
   //    : m_price{price}, m_quantity{quantity}, m_orderList{} {}
 
@@ -35,6 +35,7 @@ public:
   OrderList getOrderList() const { return m_orderList; }
 
 private:
+  Symbol m_symbol;
   Price m_price;
   Quantity m_quantity;
   OrderList m_orderList;

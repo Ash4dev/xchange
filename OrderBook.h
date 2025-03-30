@@ -15,11 +15,13 @@
 
 class OrderBook {
 private:
+  Symbol m_symbol;
   std::map<Price, LevelPointer, std::greater<Price>> m_bids;
   std::map<Price, LevelPointer, std::less<Price>> m_asks;
 
 public:
   OrderBook() = default;
+  OrderBook(Symbol symbol) : m_symbol{symbol} {}
 
   std::optional<Trade> AddOrder(Order &order);
   std::optional<Trade> CancelOrder(Order &order);
@@ -34,4 +36,6 @@ public:
   std::map<Price, LevelPointer, std::less<Price>> getAskLevels() const {
     return m_asks;
   };
+
+  Symbol getSymbol() const { return m_symbol; }
 };
