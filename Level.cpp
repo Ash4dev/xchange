@@ -6,6 +6,16 @@
 Level::Level(Symbol symbol, Price price, Quantity quantity)
     : m_symbol{symbol}, m_price{price}, m_quantity{quantity}, m_orderList{} {}
 
+TimeStamp Level::getActivationTime(const OrderID &orderID) {
+  OrderPointer orderptr = (m_info[orderID]).order;
+  return orderptr->getActivationTime();
+}
+
+TimeStamp Level::getDeactivationTime(const OrderID &orderID) {
+  OrderPointer orderptr = (m_info[orderID]).order;
+  return orderptr->getDeactivationTime();
+}
+
 void Level::AddOrder(Order &order) {
   assert(m_price == order.getPrice());
 

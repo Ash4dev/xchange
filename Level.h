@@ -34,6 +34,9 @@ public:
   Quantity getQuantity() const { return m_quantity; }
   OrderList getOrderList() const { return m_orderList; }
 
+  TimeStamp getActivationTime(const OrderID &orderID);
+  TimeStamp getDeactivationTime(const OrderID &orderID);
+
 private:
   Symbol m_symbol;
   Price m_price;

@@ -1,11 +1,21 @@
 #pragma once
 
 #include "alias/Fundamental.h"
+#include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <ctime>
 #include <limits>
 
 struct Constants {
-  // orders w/ Market order use this
-  // orders are stored in a level (have a price)
-  // InvalidPrice of type Price fits the bill
-  static const Price InvalidPrice = std::numeric_limits<Price>::quiet_NaN();
+  // Orders with Market order are equivalent to GoodTillCancel(worst Price)
+
+  // Compile-time constants
+  static constexpr double InvalidPrice =
+      std::numeric_limits<double>::quiet_NaN();
+  static constexpr std::uint32_t PriceMultiplier = 1000;
+
+  // Runtime constant (initialized once at program startup)
+  static const TimeStamp EndOfTime;
+  // const TimeStamp EndOfTime;
 };

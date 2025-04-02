@@ -1,14 +1,60 @@
 #include "OrderBook.h"
 #include "Level.h"
 #include "Trade.h"
+#include "utils/Constants.h"
 #include "utils/alias/Fundamental.h"
 #include "utils/alias/LevelRel.h"
 #include "utils/alias/OrderRel.h"
 #include "utils/enums/Side.h"
 
 #include <cassert>
+#include <cstdint>
+#include <limits.h>
 #include <memory>
 #include <optional>
+
+bool OrderBook::CancellationDueComparator::operator()(const OrderID &orderID1,
+                                                      const OrderID &orderID2) {
+  // when obj is defined as const, can't call non-const fn on it
+  // to avoid any chance of modification to the original object
+  Price price1 = decodePriceFromOrderID(orderID1);
+  Side::Side side1 = decodeSideFromOrderID(orderID1);
+  LevelPointer cancelL1 = orderBook->getLevelFromSideAndPrice(side1, price1);
+  TimeStamp cancelT1 = cancelL1->getDeactivationTime(orderID1);
+
+  Price price2 = decodePriceFromOrderID(orderID2);
+  Side::Side side2 = decodeSideFromOrderID(orderID2);
+  LevelPointer cancelL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
+  TimeStamp cancelT2 = cancelL2->getDeactivationTime(orderID2);
+
+  return cancelT1 <= cancelT2;
+}
+
+bool OrderBook::AdditionDueComparator::operator()(const OrderID &orderID1,
+                                                  const OrderID &orderID2) {
+  Price price1 = decodePriceFromOrderID(orderID1);
+  Side::Side side1 = decodeSideFromOrderID(orderID1);
+  LevelPointer addL1 = orderBook->getLevelFromSideAndPrice(side1, price1);
+  TimeStamp addT1 = addL1->getActivationTime(orderID1);
+
+  Price price2 = decodePriceFromOrderID(orderID2);
+  Side::Side side2 = decodeSideFromOrderID(orderID2);
+  LevelPointer addL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
+  TimeStamp addT2 = addL2->getActivationTime(orderID2);
+
+  return addT1 <= addT2;
+}
+
+Side::Side OrderBook::decodeSideFromOrderID(OrderID orderID) {
+  return ((orderID & 0x1) ? Side::Side::Buy : Side::Side::Sell);
+}
+
+Price OrderBook::decodePriceFromOrderID(OrderID orderID) {
+  orderID >>= 1;
+  std::uint32_t scaledPrice = orderID & UINT_MAX;
+  Price price = 1.0 * scaledPrice / Constants::PriceMultiplier;
+  return price;
+}
 
 std::optional<Trade> OrderBook::AddOrder(Order &order) {
   if (order.getSymbol() != m_symbol) {
@@ -36,10 +82,9 @@ std::optional<Trade> OrderBook::AddOrder(Order &order) {
   return OrderBook::MatchPotentialOrders();
 }
 
-std::optional<Trade> OrderBook::CancelOrder(Order &order) {
-  Price price = order.getPrice();
-  Side::Side side = order.getSide();
-  OrderID orderID = order.getOrderID();
+std::optional<Trade> OrderBook::CancelOrder(OrderID orderID) {
+  Price price = OrderBook::decodePriceFromOrderID(orderID);
+  Side::Side side = OrderBook::decodeSideFromOrderID(orderID);
 
   if (side == Side::Side::Buy) {
     m_bids[price]->CancelOrder(orderID);
@@ -53,9 +98,9 @@ std::optional<Trade> OrderBook::CancelOrder(Order &order) {
   return std::nullopt;
 }
 
-std::optional<Trade> OrderBook::ModifyOrder(Order &oldOrder,
+std::optional<Trade> OrderBook::ModifyOrder(OrderID orderID,
                                             Order &modifiedOrder) {
-  OrderBook::CancelOrder(oldOrder);
+  OrderBook::CancelOrder(orderID);
   return OrderBook::AddOrder(modifiedOrder);
 }
 
