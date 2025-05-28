@@ -19,7 +19,8 @@ bool OrderBook::CancellationDueComparator::operator()(const OrderID &orderID1,
   // to avoid any chance of modification to the original object
   Price price1 = decodePriceFromOrderID(orderID1);
   Side::Side side1 = decodeSideFromOrderID(orderID1);
-  LevelPointer cancelL1 = orderBook->getLevelFromSideAndPrice(side1, price1);
+  LevelPointer cancelL1 = orderBook->getLevelFromSideAndPrice(
+      side1, price1); // TODO: what is this syntax ???
   TimeStamp cancelT1 = cancelL1->getDeactivationTime(orderID1);
 
   Price price2 = decodePriceFromOrderID(orderID2);
@@ -30,6 +31,8 @@ bool OrderBook::CancellationDueComparator::operator()(const OrderID &orderID1,
   return cancelT1 <= cancelT2;
 }
 
+// TODO: can it be a single function w activation/deactivation as param? (likely
+// yes)
 bool OrderBook::AdditionDueComparator::operator()(const OrderID &orderID1,
                                                   const OrderID &orderID2) {
   Price price1 = decodePriceFromOrderID(orderID1);
@@ -46,31 +49,44 @@ bool OrderBook::AdditionDueComparator::operator()(const OrderID &orderID1,
 }
 
 Side::Side OrderBook::decodeSideFromOrderID(OrderID orderID) {
-  return ((orderID & 0x1) ? Side::Side::Buy : Side::Side::Sell);
+  return ((orderID & 0x1)
+              ? Side::Side::Buy
+              : Side::Side::Sell); // side is the last bit of orderID
 }
 
 Price OrderBook::decodePriceFromOrderID(OrderID orderID) {
-  orderID >>= 1;
-  std::uint32_t scaledPrice = orderID & UINT_MAX;
-  Price price = 1.0 * scaledPrice / Constants::PriceMultiplier;
+  orderID >>= 1; // last bit is not imp for price information
+  std::uint32_t scaledPrice =
+      orderID &
+      UINT_MAX; // & with all 1s retains on bits (can't store floats: so int)
+  Price price = 1.0 * scaledPrice /
+                Constants::PriceMultiplier; // 3 place floats hence divide by
+                                            // 1000 (multiplier)
   return price;
 }
 
+// optional since trade may/may not be possible C++ 17 feature
+// essentially returns 2 values: bool (success/failure) & return val (result)
+// optional is syntactic sugar, no need of ugly manual implementation
+
+// cannot add using orderID before it has been added to the orderbook (silly
+// doubt)
 std::optional<Trade> OrderBook::AddOrder(Order &order) {
-  if (order.getSymbol() != m_symbol) {
-    return std::nullopt;
+  if (order.getSymbol() !=
+      m_symbol) {        // order does not belong to this OrderBook
+    return std::nullopt; //  failure indicator
   }
 
   Price price = order.getPrice();
   Side::Side side = order.getSide();
 
-  if (side == Side::Side::Buy) {
-    if (m_bids.find(price) == m_bids.end()) {
-      Level newBidLevel = Level(m_symbol, price, 0);
+  if (side == Side::Side::Buy) { // if a bid placed, check on ask (vice-versa)
+    if (m_bids.find(price) == m_bids.end()) { // if price level not exists
+      Level newBidLevel = Level(m_symbol, price, 0); // create level & pointer
       LevelPointer newBidLevelPointer = std::make_shared<Level>(newBidLevel);
-      m_bids[price] = newBidLevelPointer;
+      m_bids[price] = newBidLevelPointer; // store level on bids side
     }
-    m_bids[price]->AddOrder(order);
+    m_bids[price]->AddOrder(order); // add order to the level
   } else {
     if (m_asks.find(price) == m_asks.end()) {
       Level newAskLevel = Level(m_symbol, price, 0);
@@ -79,23 +95,26 @@ std::optional<Trade> OrderBook::AddOrder(Order &order) {
     }
     m_asks[price]->AddOrder(order);
   }
-  return OrderBook::MatchPotentialOrders();
+  return OrderBook::MatchPotentialOrders(); // check if match possible
 }
 
+// orderID must exist for existing order, since only it can be deleted
 std::optional<Trade> OrderBook::CancelOrder(OrderID orderID) {
   Price price = OrderBook::decodePriceFromOrderID(orderID);
   Side::Side side = OrderBook::decodeSideFromOrderID(orderID);
 
   if (side == Side::Side::Buy) {
-    m_bids[price]->CancelOrder(orderID);
-    if (m_bids[price]->getQuantity() == 0)
+    m_bids[price]->CancelOrder(orderID);   // cancel it
+    if (m_bids[price]->getQuantity() == 0) // no more volume on level, delete it
       m_bids.erase(price);
   } else {
     m_asks[price]->CancelOrder(orderID);
     if (m_asks[price]->getQuantity() == 0)
       m_asks.erase(price);
   }
-  return std::nullopt;
+
+  // TODO: should not it return OrderBook::MatchPotentialOrders()?
+  return std::nullopt; // TODO: does it imply no match possible after cancel?
 }
 
 std::optional<Trade> OrderBook::ModifyOrder(OrderID orderID,
@@ -104,14 +123,18 @@ std::optional<Trade> OrderBook::ModifyOrder(OrderID orderID,
   return OrderBook::AddOrder(modifiedOrder);
 }
 
+// act as check before matching TODO: where the hell is it used??
 bool OrderBook::CanMatchOrder(Side::Side side, Price price) const {
   // ternary operator fails for incompatible types
   // m_bids and m_asks are incompatible types: comparators
-  if (side == Side::Side::Buy) {
-    if (m_asks.empty())
+
+  if (side == Side::Side::Buy) { // if a bid, match w asks (vice-versa)
+    if (m_asks.empty())          // no ask no match
       return false;
-    LevelPointer bestAskLevelPointer = (*m_asks.begin()).second;
-    return (price >= bestAskLevelPointer->getPrice());
+    LevelPointer bestAskLevelPointer =
+        (*m_asks.begin()).second; // find best ask
+    return (price >=
+            bestAskLevelPointer->getPrice()); // bid >= ask (trade occur)
   } else {
     if (m_bids.empty())
       return false;
@@ -123,36 +146,46 @@ bool OrderBook::CanMatchOrder(Side::Side side, Price price) const {
 // https://www.learncpp.com/cpp-tutorial/stdoptional/
 std::optional<Trade> OrderBook::MatchPotentialOrders() {
 
-  if ((m_bids.empty() || m_asks.empty())) {
-    return std::nullopt;
+  if ((m_bids.empty() || m_asks.empty())) { // bids & asks both must for trade
+    return std::nullopt;                    // failure indicator
   }
 
+  // obtain best levels on each side
   LevelPointer bestBidLevelPointer = (*m_bids.begin()).second;
   LevelPointer bestAskLevelPointer = (*m_asks.begin()).second;
 
-  if (bestBidLevelPointer->getPrice() < bestAskLevelPointer->getPrice()) {
+  if (bestBidLevelPointer->getPrice() <
+      bestAskLevelPointer->getPrice()) { // bidp >= askp for trade
     return std::nullopt;
   }
 
+  // get first orders on each sides best level
   OrderPointer bestBidOrder = bestBidLevelPointer->getOrderList().front();
   OrderPointer bestAskOrder = bestAskLevelPointer->getOrderList().front();
 
+  // min of both qty can only be filled
   Quantity filledQuantity = std::min(bestBidOrder->getRemainingQuantity(),
                                      bestAskOrder->getRemainingQuantity());
 
+  // TODO: confirm correctness? askprice or bidprice
+  // ask: buyer spends less than willing & sellers get desired
+  // bid: buyers spends as much as willing & sellers get more
   Price settlementPrice = bestAskLevelPointer->getPrice();
 
+  // update the remaining volume of orders
   bestBidOrder->FillPartially(filledQuantity);
   bestAskOrder->FillPartially(filledQuantity);
+  // update volumes of levels of both sides
   bestBidLevelPointer->UpdateLevelQuantityPostMatch(filledQuantity);
   bestAskLevelPointer->UpdateLevelQuantityPostMatch(filledQuantity);
 
+  // remove order from level if no remaining Quantity
   if (bestBidOrder->isFullyFilled()) {
     OrderID bidOrderID = bestBidOrder->getOrderID();
-    bestBidLevelPointer->removeMatchedOrder(bidOrderID);
-    //    if (bestAskLevelPointer->getOrderList().empty())  equivalent condition
-    //    for level deletion
-    if (bestAskLevelPointer->getQuantity() == 0) {
+    bestBidLevelPointer->removeMatchedOrder(bidOrderID); // remove order
+
+    //    if (bestBidLevelPointer->getOrderList().empty())  equivalent condition
+    if (bestBidLevelPointer->getQuantity() == 0) { // if level empty, remove it
       m_bids.erase(bestBidLevelPointer->getPrice());
     }
   }
@@ -164,6 +197,8 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
     }
   }
 
+  // store trade information
+  // TODO: trade execution time?
   OrderTraded bidTrade{bestBidOrder->getOrderID(), settlementPrice,
                        filledQuantity};
   OrderTraded askTrade{bestAskOrder->getOrderID(), settlementPrice,

@@ -37,12 +37,13 @@ int main() {
   trades.push_back(orderBook.AddOrder(o31));
 
   // o1 matched with o21 (o2 leads to segmentation fault check once)
-  trades.push_back(orderBook.CancelOrder(o21)); // CANCELLED
-  trades.push_back(orderBook.CancelOrder(o21)); // NOT CANCELLED (REPEAT)
+  trades.push_back(orderBook.CancelOrder(o21.getOrderID())); // CANCELLED
+  trades.push_back(
+      orderBook.CancelOrder(o21.getOrderID())); // NOT CANCELLED (REPEAT)
 
   Order o4 = Order("A", OrderType::OrderType::GoodTillCancel, Side::Side::Buy,
                    93, 100);
-  trades.push_back(orderBook.ModifyOrder(o2, o4)); // MODIFIED
+  trades.push_back(orderBook.ModifyOrder(o2.getOrderID(), o4)); // MODIFIED
 
   Order o5 = Order("A", OrderType::OrderType::GoodTillCancel, Side::Side::Buy,
                    107, 12);

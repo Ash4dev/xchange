@@ -3,7 +3,6 @@
 #include <functional>
 #include <map>
 #include <optional>
-#include <queue>
 #include <set>
 #include <unordered_map>
 
@@ -18,8 +17,11 @@
 class OrderBook {
 private:
   Symbol m_symbol;
-  std::map<Price, LevelPointer, std::greater<Price>> m_bids;
-  std::map<Price, LevelPointer, std::less<Price>> m_asks;
+  std::map<Price, LevelPointer, std::greater<Price>> m_bids; // max bid tradable
+  std::map<Price, LevelPointer, std::less<Price>> m_asks;    // min ask tradable
+
+  // direct functions cannot be used as comparators (check this up)
+  // TODO: not even static functions? find more about this!
   struct AdditionDueComparator {
     const OrderBook *orderBook;
     explicit AdditionDueComparator(const OrderBook *ob) : orderBook(ob) {}
@@ -32,17 +34,21 @@ private:
     bool operator()(const OrderID &orderID1, const OrderID &orderID2);
   };
 
+  // sort orders in addition/cancellation wait queues
   std::set<OrderID, OrderBook::AdditionDueComparator> addQueue;
   std::set<OrderID, OrderBook::CancellationDueComparator> cancelQueue;
 
 public:
+  // various constructors
   OrderBook() = default;
   OrderBook(Symbol symbol) : m_symbol{symbol} {}
+  OrderBook(OrderBook &ob); // copy constructor
 
-  // made static since stays same across all instance
+  // made static since stay same across all instances
   static Price decodePriceFromOrderID(OrderID orderID);
   static Side::Side decodeSideFromOrderID(OrderID orderID);
 
+  // core functionality of orderbook
   std::optional<Trade> AddOrder(Order &order);
   std::optional<Trade> CancelOrder(OrderID orderID);
   std::optional<Trade> ModifyOrder(OrderID orderID, Order &modifiedOrder);
@@ -56,9 +62,11 @@ public:
       return m_asks.at(price);
   }
 
+  // matching functionality
   bool CanMatchOrder(Side::Side side, Price price) const;
   std::optional<Trade> MatchPotentialOrders();
 
+  // store the levels for each side
   std::map<Price, LevelPointer, std::greater<Price>> getBidLevels() const {
     return m_bids;
   };
@@ -66,5 +74,5 @@ public:
     return m_asks;
   };
 
-  Symbol getSymbol() const { return m_symbol; }
+  Symbol getSymbol() const { return m_symbol; } // symbol getter
 };

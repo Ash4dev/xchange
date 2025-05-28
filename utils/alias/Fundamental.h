@@ -11,6 +11,6 @@ using Price = std::int32_t;
 using Quantity = std::uint64_t;
 using Symbol = std::string;
 
-// check for better alternatives: chrono
+// TODO: totally migrate from ctime to chrono
 using TimeStamp = std::chrono::system_clock::time_point;
 using OrderID = std::uint64_t;

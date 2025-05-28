@@ -4,11 +4,6 @@
 #include <cstdint>
 #include <stdexcept>
 
-// #include <chrono>
-// #include <ctime>   // for std::tm, mktime
-// #include <iomanip> // for std::get_time (if parsing from string)
-// #include <sstream> // for std::istringstream (if parsing from string)
-//
 #include "utils/Constants.h"
 #include "utils/alias/Fundamental.h"
 #include "utils/enums/OrderTypes.h"
@@ -16,16 +11,18 @@
 
 class Order {
 public:
+  // various constructors
   Order() = default;
   Order(const Symbol symbol, const OrderType::OrderType orderType,
         const Side::Side side, const Price price, const Quantity quantity,
-        const std::string &activationTime, const std::string &deactivationTime);
+        const std::string &activationTime = "",
+        const std::string &deactivationTime = "");
+  Order(const Order &other); // copy constructor
 
-  // copy constructor
-  Order(const Order &other);
-
+  // time functionality
   TimeStamp convertDateTimeToTimeStamp(const std::string &s);
   OrderID encodeOrderID(TimeStamp timestamp, Price price, bool isBid);
+
   bool operator<(const Order &other) const;
 
   void FillPartially(Quantity quantity);

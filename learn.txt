@@ -8,4 +8,8 @@ Enums:
 
 Classes:
 - const member fns can't change value of data members
-    - append const after function name
+    - append const after function unscoped-enumerations
+
+
+      Endpoint:
+      https://chatgpt.com/share/67e38882-c968-800c-a57e-96639b3a552f
