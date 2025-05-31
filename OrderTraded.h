@@ -4,6 +4,6 @@
 
 struct OrderTraded {
   OrderID orderID;
-  Price price;
+  double price;
   Quantity quantityFilled;
 };

@@ -14,7 +14,7 @@ public:
   // various constructors
   Order() = default;
   Order(const Symbol symbol, const OrderType::OrderType orderType,
-        const Side::Side side, const Price price, const Quantity quantity,
+        const Side::Side side, const double price, const Quantity quantity,
         const std::string &activationTime = "",
         const std::string &deactivationTime = "");
   Order(const Order &other); // copy constructor

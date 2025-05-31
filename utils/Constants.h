@@ -13,7 +13,7 @@ struct Constants {
   // Compile-time constants
   static constexpr double InvalidPrice =
       std::numeric_limits<double>::quiet_NaN();
-  static constexpr std::uint32_t PriceMultiplier = 1000;
+  static constexpr std::uint32_t PriceMultiplier = 100;
 
   // Runtime constant (initialized once at program startup)
   static const TimeStamp EndOfTime;

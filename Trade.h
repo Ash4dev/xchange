@@ -8,7 +8,7 @@ class Trade {
 public:
   Trade(OrderTraded &bidOrder, OrderTraded &askOrder)
       : m_bidMatch{bidOrder}, m_askMatch{askOrder} {
-    m_timeMatch = std::chrono::system_clock::now().time_since_epoch().count();
+    m_timeMatch = std::chrono::system_clock::now();
   }
 
   // https://stackoverflow.com/a/16449914

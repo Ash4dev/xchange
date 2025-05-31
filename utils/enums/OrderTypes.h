@@ -3,7 +3,6 @@
 /* references:
  * https://chatgpt.com/share/67e52253-fee0-800c-9434-01439719d181
  * https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins-14
- * https://www.5paisa.com/stock-market-guide/stock-share-market/good-till-cancelled-gtc
  */
 
 /* reductions:

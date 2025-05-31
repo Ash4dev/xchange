@@ -9,7 +9,7 @@ int main() {
   OrderBook orderBook = OrderBook("A");
   std::vector<std::optional<Trade>> trades;
   Order o1 = Order("A", OrderType::OrderType::GoodTillCancel, Side::Side::Buy,
-                   100, 20);
+                   100.32, 20);
   trades.push_back(orderBook.AddOrder(o1)); // ADDED
 
   Order o2 =

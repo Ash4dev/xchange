@@ -170,7 +170,11 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
   // TODO: confirm correctness? askprice or bidprice
   // ask: buyer spends less than willing & sellers get desired
   // bid: buyers spends as much as willing & sellers get more
-  Price settlementPrice = bestAskLevelPointer->getPrice();
+  // avg of bid and ask since don't know aggressor & fair
+  double settlementPrice = (1.0 * bestAskLevelPointer->getPrice()) / 100;
+  // Price settlementPrice =
+  // (bestBidLevelPointer->getPrice() + bestAskLevelPointer->getPrice()) / 2;
+  ;
 
   // update the remaining volume of orders
   bestBidOrder->FillPartially(filledQuantity);
@@ -198,7 +202,6 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
   }
 
   // store trade information
-  // TODO: trade execution time?
   OrderTraded bidTrade{bestBidOrder->getOrderID(), settlementPrice,
                        filledQuantity};
   OrderTraded askTrade{bestAskOrder->getOrderID(), settlementPrice,

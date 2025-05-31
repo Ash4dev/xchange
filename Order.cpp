@@ -9,12 +9,14 @@
 #include <stdexcept>
 
 Order::Order(const Symbol symbol, OrderType::OrderType orderType,
-             Side::Side side, Price price, Quantity quantity,
+             Side::Side side, double price, Quantity quantity,
              const std::string &activationTime,
              const std::string &deactivationTime)
-    : m_symbol{symbol}, m_orderType{orderType}, m_side{side}, m_price{price},
-      m_remQuantity{quantity} {
+    : m_symbol{symbol}, m_orderType{orderType}, m_side{side},
+      m_price{static_cast<int>(price * 100)}, m_remQuantity{quantity} {
 
+  // 100 is price multiplier
+  // keep sure all values are in int to avoid round off, precision errors etc
   m_timestamp = std::chrono::system_clock::now(); // time_point
   m_orderID =
       Order::encodeOrderID(m_timestamp, price, m_side == Side::Side::Buy);
