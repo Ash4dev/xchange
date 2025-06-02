@@ -1,10 +1,10 @@
 #include "OrderBook.h"
 #include "Level.h"
 #include "Trade.h"
-#include "utils/Constants.h"
 #include "utils/alias/Fundamental.h"
 #include "utils/alias/LevelRel.h"
 #include "utils/alias/OrderRel.h"
+#include "utils/enums/OrderTypes.h"
 #include "utils/enums/Side.h"
 
 #include <cassert>
@@ -13,41 +13,45 @@
 #include <memory>
 #include <optional>
 
-bool OrderBook::CancellationDueComparator::operator()(const OrderID &orderID1,
-                                                      const OrderID &orderID2) {
-  // when obj is defined as const, can't call non-const fn on it
-  // to avoid any chance of modification to the original object
-  Price price1 = decodePriceFromOrderID(orderID1);
-  Side::Side side1 = decodeSideFromOrderID(orderID1);
-  LevelPointer cancelL1 = orderBook->getLevelFromSideAndPrice(
-      side1, price1); // TODO: what is this syntax ???
-  TimeStamp cancelT1 = cancelL1->getDeactivationTime(orderID1);
-
-  Price price2 = decodePriceFromOrderID(orderID2);
-  Side::Side side2 = decodeSideFromOrderID(orderID2);
-  LevelPointer cancelL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
-  TimeStamp cancelT2 = cancelL2->getDeactivationTime(orderID2);
-
-  return cancelT1 <= cancelT2;
-}
-
-// TODO: can it be a single function w activation/deactivation as param? (likely
-// yes)
-bool OrderBook::AdditionDueComparator::operator()(const OrderID &orderID1,
-                                                  const OrderID &orderID2) {
-  Price price1 = decodePriceFromOrderID(orderID1);
-  Side::Side side1 = decodeSideFromOrderID(orderID1);
-  LevelPointer addL1 = orderBook->getLevelFromSideAndPrice(side1, price1);
-  TimeStamp addT1 = addL1->getActivationTime(orderID1);
-
-  Price price2 = decodePriceFromOrderID(orderID2);
-  Side::Side side2 = decodeSideFromOrderID(orderID2);
-  LevelPointer addL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
-  TimeStamp addT2 = addL2->getActivationTime(orderID2);
-
-  return addT1 <= addT2;
-}
-
+//
+// bool OrderBook::CancellationDueComparator::operator()(const OrderID
+// &orderID1,
+//                                                       const OrderID
+//                                                       &orderID2) {
+//   // when obj is defined as const, can't call non-const fn on it
+//   // to avoid any chance of modification to the original object
+//   Price price1 = decodePriceFromOrderID(orderID1);
+//   Side::Side side1 = decodeSideFromOrderID(orderID1);
+//   LevelPointer cancelL1 = orderBook->getLevelFromSideAndPrice(
+//       side1, price1); // TODO: what is this syntax ???
+//   TimeStamp cancelT1 = cancelL1->getDeactivationTime(orderID1);
+//
+//   Price price2 = decodePriceFromOrderID(orderID2);
+//   Side::Side side2 = decodeSideFromOrderID(orderID2);
+//   LevelPointer cancelL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
+//   TimeStamp cancelT2 = cancelL2->getDeactivationTime(orderID2);
+//
+//   return cancelT1 <= cancelT2;
+// }
+//
+// // TODO: can it be a single function w activation/deactivation as param?
+// (likely
+// // yes)
+// bool OrderBook::AdditionDueComparator::operator()(const OrderID &orderID1,
+//                                                   const OrderID &orderID2) {
+//   Price price1 = decodePriceFromOrderID(orderID1);
+//   Side::Side side1 = decodeSideFromOrderID(orderID1);
+//   LevelPointer addL1 = orderBook->getLevelFromSideAndPrice(side1, price1);
+//   TimeStamp addT1 = addL1->getActivationTime(orderID1);
+//
+//   Price price2 = decodePriceFromOrderID(orderID2);
+//   Side::Side side2 = decodeSideFromOrderID(orderID2);
+//   LevelPointer addL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
+//   TimeStamp addT2 = addL2->getActivationTime(orderID2);
+//
+//   return addT1 <= addT2;
+// }
+//
 Side::Side OrderBook::decodeSideFromOrderID(OrderID orderID) {
   return ((orderID & 0x1)
               ? Side::Side::Buy
@@ -55,13 +59,10 @@ Side::Side OrderBook::decodeSideFromOrderID(OrderID orderID) {
 }
 
 Price OrderBook::decodePriceFromOrderID(OrderID orderID) {
-  orderID >>= 1; // last bit is not imp for price information
-  std::uint32_t scaledPrice =
-      orderID &
-      UINT_MAX; // & with all 1s retains on bits (can't store floats: so int)
-  Price price = 1.0 * scaledPrice /
-                Constants::PriceMultiplier; // 3 place floats hence divide by
-                                            // 1000 (multiplier)
+  // last bit is not imp for price information
+  // & with all 1s retains on bits (can't store floats: so int)
+  // this mask is not the same as UINT32_MAX
+  std::uint32_t price = (orderID >> 1) & ((static_cast<OrderID>(1) << 31) - 1);
   return price;
 }
 
@@ -77,8 +78,20 @@ std::optional<Trade> OrderBook::AddOrder(Order &order) {
     return std::nullopt; //  failure indicator
   }
 
-  Price price = order.getPrice();
   Side::Side side = order.getSide();
+
+  // if (order.getOrderType() == OrderType::OrderType::Market){
+  //   if (side == Side::Side::Buy){
+  //     int newPrice = order.getPrice();
+  //     if (!m_asks.empty()){newPrice = (*m_asks.rbegin()).first;}
+  //     // if not matched immeadiately, converts into a limit order
+  //     if (m_asks.empty())
+  //     {order.setOrderType(OrderType::OrderType::GoodTillCancel);}
+  //   }
+  //   order.setPrice(Price newPrice)
+  // }
+
+  Price price = order.getPrice();
 
   if (side == Side::Side::Buy) { // if a bid placed, check on ask (vice-versa)
     if (m_bids.find(price) == m_bids.end()) { // if price level not exists
@@ -103,18 +116,33 @@ std::optional<Trade> OrderBook::CancelOrder(OrderID orderID) {
   Price price = OrderBook::decodePriceFromOrderID(orderID);
   Side::Side side = OrderBook::decodeSideFromOrderID(orderID);
 
+  // debugging: printed price & trade, before & after: ol size, m_x size
+
   if (side == Side::Side::Buy) {
-    m_bids[price]->CancelOrder(orderID);   // cancel it
-    if (m_bids[price]->getQuantity() == 0) // no more volume on level, delete it
+    if (m_bids.count(price) == 0) {
+      std::cout << "no such bid level w price " << price << std::endl;
+      return std::nullopt;
+    }
+    m_bids[price]->CancelOrder(orderID); // cancel it
+    if (m_bids[price]->getQuantity() ==
+        0) { // no more volume on level, delete it
       m_bids.erase(price);
+    }
+
   } else {
+    if (m_asks.count(price) == 0) {
+      std::cout << "no such ask level w price " << price << std::endl;
+      return std::nullopt;
+    }
     m_asks[price]->CancelOrder(orderID);
-    if (m_asks[price]->getQuantity() == 0)
+    if (m_asks[price]->getQuantity() == 0) {
       m_asks.erase(price);
+    }
   }
 
-  // TODO: should not it return OrderBook::MatchPotentialOrders()?
-  return std::nullopt; // TODO: does it imply no match possible after cancel?
+  // cancellation cannot yield a match: if could be matched, would have
+  // ends returns std::nullopt
+  return std::nullopt;
 }
 
 std::optional<Trade> OrderBook::ModifyOrder(OrderID orderID,
@@ -207,4 +235,24 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
   OrderTraded askTrade{bestAskOrder->getOrderID(), settlementPrice,
                        filledQuantity};
   return Trade{bidTrade, askTrade};
+}
+
+void OrderBook::printOrderBookState(const std::string &message) {
+  std::cout << message << std::endl;
+
+  std::cout << "----------BID------------" << std::endl;
+  for (auto &ele : OrderBook::getBidLevels()) {
+    auto &lev = ele.second;
+    std::cout << lev->getPrice() << " " << lev->getQuantity() << " "
+              << lev->getOrderList().size() << std::endl;
+  }
+  std::cout << "----------ASK------------" << std::endl;
+
+  std::cout << "ASK" << std::endl;
+  for (auto &ele : OrderBook::getAskLevels()) {
+    auto &lev = ele.second;
+    std::cout << lev->getPrice() << " " << lev->getQuantity() << " "
+              << lev->getOrderList().size() << std::endl;
+  }
+  std::cout << "----------DONE------------" << std::endl;
 }

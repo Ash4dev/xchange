@@ -39,6 +39,9 @@ public:
   TimeStamp getActivationTime() const { return m_activateTime; }
   TimeStamp getDeactivationTime() const { return m_deactivateTime; }
 
+  void setPrice(Price newPrice) { m_price = newPrice; }
+  void setOrderType(OrderType::OrderType newType) { m_orderType = newType; }
+
 private:
   Symbol m_symbol;
   OrderType::OrderType m_orderType;

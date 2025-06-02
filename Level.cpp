@@ -1,6 +1,6 @@
 #include "Level.h"
 #include "utils/alias/Fundamental.h"
-
+#include <iterator>
 #include <unordered_map>
 
 Level::Level(Symbol symbol, Price price, Quantity quantity)
@@ -46,10 +46,12 @@ void Level::CancelOrder(OrderID orderID) {
   // obtain to be deleted order information
   const auto &[corrOrderPointer, corrOrderListIterator] = m_info.at(orderID);
 
+  // debugging: before & after: m_quantity, ol size, info size
   m_quantity -=
       corrOrderPointer->getRemainingQuantity(); // subtract qty from level
-  m_orderList.erase(corrOrderListIterator);     // remove from list of orders
-  m_info.erase(orderID); // remove information of old order
+
+  m_orderList.erase(corrOrderListIterator); // remove from list of orders
+  m_info.erase(orderID);                    // remove information of old order
 }
 
 void Level::ModifyOrder(OrderID oldOrderID, Order &ModifiedOrder) {

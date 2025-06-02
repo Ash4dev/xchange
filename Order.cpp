@@ -8,18 +8,23 @@
 #include <sstream>
 #include <stdexcept>
 
+#define PRICE_MULTIPLIER 100
+
 Order::Order(const Symbol symbol, OrderType::OrderType orderType,
              Side::Side side, double price, Quantity quantity,
              const std::string &activationTime,
              const std::string &deactivationTime)
     : m_symbol{symbol}, m_orderType{orderType}, m_side{side},
-      m_price{static_cast<int>(price * 100)}, m_remQuantity{quantity} {
+      m_price{static_cast<int>(price * PRICE_MULTIPLIER)},
+      m_remQuantity{quantity} {
 
-  // 100 is price multiplier
+  // static_cast: purely compile time explicit inbuilt/custom cast operator
+  // no runtime check -> typecast to parent class, but access child method
+  // above problematic -> solution: dynamic_cast
   // keep sure all values are in int to avoid round off, precision errors etc
   m_timestamp = std::chrono::system_clock::now(); // time_point
   m_orderID =
-      Order::encodeOrderID(m_timestamp, price, m_side == Side::Side::Buy);
+      Order::encodeOrderID(m_timestamp, m_price, m_side == Side::Side::Buy);
 
   // expect time in dd-mm-yyyy hh:mm:ss format
   m_activateTime =
@@ -68,21 +73,30 @@ Order::Order(const Order &other)
       m_orderID{other.getOrderID()}, m_activateTime{other.getActivationTime()},
       m_deactivateTime{other.getDeactivationTime()} {}
 
-OrderID Order::encodeOrderID(TimeStamp time, Price price, bool isBid) {
-  assert(price * Constants::PriceMultiplier * 2 <= UINT32_MAX);
-  std::uint32_t intPrice = price * Constants::PriceMultiplier;
+OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid) {
+  assert(intPrice * 2 <= UINT32_MAX);
 
   // https://stackoverflow.com/a/31553641
   // steady_clock: stopwatch, system_clock: timestamp
   // chrono: protects against unsafe type conversions (mostly manual)
-  // TODO: instead of timestamp use random number seq 32 bits
+
+  // timestamp at ns scale provides enough uniqueness
+  // hence no random number used in orderID
   std::uint64_t timestamp = m_timestamp.time_since_epoch().count();
 
   // interpretation of encodeOrderID
-  // MSB 32 bits: timestamp (uniqueness at ns scale)
-  // next 31 bits store the Price to uint32_t
-  // last stores side
-  return (timestamp << 32) | (intPrice << 1) | isBid;
+  // bit 63-32: timestamp (uniqueness at ns scale)
+  // bit 31-1: store the Price to uint32_t
+  // bit 0: stores side
+
+  // put whole expressions in parenthesis (operator precendence screwed us)
+  // determined by prinitng pre-encoding & post-encoding version of each param
+  OrderID id = 0;
+  id |= ((static_cast<OrderID>(timestamp)) << 32);
+  id |= ((static_cast<OrderID>(intPrice)) << 1);
+  id |= ((isBid) ? static_cast<OrderID>(1) : static_cast<OrderID>(0));
+  return id;
+  // return ((timestamp << 31) | (intPrice << 1) | isBid);
 }
 void Order::FillPartially(Quantity quantity) {
   assert(quantity <= m_remQuantity);
