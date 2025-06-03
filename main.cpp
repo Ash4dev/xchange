@@ -24,6 +24,16 @@ void printMatchedTrades(std::vector<std::optional<Trade>> &trades) {
 
 int main() {
   OrderBook orderBook = OrderBook("A");
+
+  /* TODO: create tests for different scenarios
+   * actions: add, cancel, modify(implied)
+   * -- same/different level
+   * ordertypes: individual, conversion
+   * -- preprocessor handling
+   * match: no/partial/complete
+   * edge cases: partial+cancel, -ve qty etc.
+   */
+
   std::vector<std::optional<Trade>> trades;
   Order o1 = Order("A", OrderType::OrderType::GoodTillCancel, Side::Side::Buy,
                    90.39, 20);

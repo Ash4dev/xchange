@@ -2,7 +2,6 @@
 #include "utils/alias/Fundamental.h"
 #include <iterator>
 #include <unordered_map>
-
 Level::Level(Symbol symbol, Price price, Quantity quantity)
     : m_symbol{symbol}, m_price{price}, m_quantity{quantity}, m_orderList{} {}
 

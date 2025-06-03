@@ -3,10 +3,11 @@
 #include "utils/alias/OrderRel.h"
 #include "utils/enums/OrderTypes.h"
 #include <memory>
+#include <ostream>
 #include <set>
 #include <unordered_map>
 
-PreProcessor::PreProcessor() {
+PreProcessor::PreProcessor(std::string &symbol) : m_symbol(symbol) {
   int typesz = m_typeRank.size();
   m_laterProcessOrders.resize(typesz);
   m_lastFlushTime = std::chrono::system_clock::now();
@@ -26,7 +27,19 @@ std::unordered_map<OrderType::OrderType, int> PreProcessor::m_typeRank = {
     {OrderType::OrderType::MarketOnOpen, 8},
     {OrderType::OrderType::MarketOnClose, 9}};
 
-void PreProcessor::InsertOrderInOrderBook(Order &order) {
+std::unordered_map<int, OrderType::OrderType> PreProcessor::m_rankType = {
+    {0, OrderType::OrderType::Market},
+    {1, OrderType::OrderType::FillOrKill},
+    {2, OrderType::OrderType::ImmediateOrCancel},
+    {3, OrderType::OrderType::GoodAfterTime},
+    {4, OrderType::OrderType::GoodForDay},
+    {5, OrderType::OrderType::GoodTillDate},
+    {6, OrderType::OrderType::AllOrNone},
+    {7, OrderType::OrderType::GoodTillCancel},
+    {8, OrderType::OrderType::MarketOnOpen},
+    {9, OrderType::OrderType::MarketOnClose}};
+
+void PreProcessor::AddOrderInOrderBook(Order &order) {
   OrderPointer orderptr = std::make_shared<Order>(order);
   int typeId = m_typeRank[orderptr->getOrderType()]; // get order rank
   OrderActionInfo ordactinfo = OrderActionInfo(orderptr, true);
@@ -34,7 +47,7 @@ void PreProcessor::InsertOrderInOrderBook(Order &order) {
   seenOrders[orderptr->getOrderID()] = orderptr;
 }
 
-void PreProcessor::RemoveOrderFromOrderBook(OrderID &orderId,
+void PreProcessor::CancelOrderFromOrderBook(const OrderID &orderId,
                                             OrderBook &orderbook) {
   // alt1: encode all info of order class into orderID (less space, poor
   // scalability) alt2: maintain unordered_map<OrderID, OrderPointer> (more
@@ -44,8 +57,17 @@ void PreProcessor::RemoveOrderFromOrderBook(OrderID &orderId,
   OrderPointer orderptr = seenOrders[orderId];
   int typeId = m_typeRank[orderptr->getOrderType()];
   OrderActionInfo ordactinfo = OrderActionInfo(orderptr, false);
+  // what if identical order add and cancel?? eliminate on spot -> write logic
   m_laterProcessOrders[typeId].insert(ordactinfo); // insert to vector
   seenOrders.erase(orderId); // no more use of storing seen order
+}
+
+void PreProcessor::ModifyOrderFromOrderBook(const OrderID &oldID,
+                                            OrderBook &orderbook,
+                                            Order &newOrder) {
+  // modify not shown explicitly since linear combination
+  CancelOrderFromOrderBook(oldID, orderbook);
+  AddOrderInOrderBook(newOrder);
 }
 
 void PreProcessor::QueueOrdersIntoWaitQueue() {
@@ -101,5 +123,60 @@ void PreProcessor::ClearSeenOrdersWhenMatched(
     if (!seenOrders.count(id))
       continue;
     seenOrders.erase(id);
+  }
+}
+
+void PreProcessor::printPreProcessorStatus() {
+  std::cout << "LATER QUEUES" << std::endl;
+
+  // why does std::views::enumerate fail? no member views in std
+  for (int idx = 0; idx < m_laterProcessOrders.size(); idx++) {
+    auto ms = m_laterProcessOrders[idx];
+    std::cout << "type: " << getType(m_rankType[idx]) << " size: " << ms.size()
+              << std::endl;
+    std::cout << "ORDERS: " << std::endl;
+    for (auto [ptr, action] : ms) {
+      std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
+                << " price: " << ptr->getPrice()
+                << " rem qty: " << ptr->getRemainingQuantity() << std::endl;
+      ptr->printTimeInfo();
+    }
+  }
+
+  std::cout << "WAIT QUEUES" << std::endl;
+  std::cout << "size: " << m_waitQueue.size() << std::endl;
+  if (m_waitQueue.empty())
+    return;
+  auto [ptr, action] = m_waitQueue.front();
+  std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
+            << " price: " << ptr->getPrice()
+            << " rem qty: " << ptr->getRemainingQuantity() << std::endl;
+  ptr->printTimeInfo();
+}
+
+std::string PreProcessor::getType(OrderType::OrderType type) {
+  switch (type) {
+  case OrderType::OrderType::Market:
+    return "Market";
+  case OrderType::OrderType::FillOrKill:
+    return "FillOrKill";
+  case OrderType::OrderType::ImmediateOrCancel:
+    return "ImmediateOrCancel";
+  case OrderType::OrderType::GoodAfterTime:
+    return "GoodAfterTime";
+  case OrderType::OrderType::GoodForDay:
+    return "GoodForDay";
+  case OrderType::OrderType::GoodTillDate:
+    return "GoodTillDate";
+  case OrderType::OrderType::AllOrNone:
+    return "AllOrNone";
+  case OrderType::OrderType::GoodTillCancel:
+    return "GoodTillCancel";
+  case OrderType::OrderType::MarketOnOpen:
+    return "MarketOnOpen";
+  case OrderType::OrderType::MarketOnClose:
+    return "MarketOnClose";
+  default:
+    return "Unknown";
   }
 }

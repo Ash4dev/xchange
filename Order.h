@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 
@@ -20,7 +21,9 @@ public:
   Order(const Order &other); // copy constructor
 
   // time functionality
-  TimeStamp convertDateTimeToTimeStamp(const std::string &s);
+  static std::string
+  returnReadableTime(const std::chrono::system_clock::time_point &tt);
+  static TimeStamp convertDateTimeToTimeStamp(const std::string &s);
   OrderID encodeOrderID(TimeStamp timestamp, Price price, bool isBid);
 
   bool operator<(const Order &other) const;
@@ -38,6 +41,8 @@ public:
   TimeStamp getOrderTime() const { return m_timestamp; }
   TimeStamp getActivationTime() const { return m_activateTime; }
   TimeStamp getDeactivationTime() const { return m_deactivateTime; }
+
+  const void printTimeInfo() const;
 
   void setPrice(Price newPrice) { m_price = newPrice; }
   void setOrderType(OrderType::OrderType newType) { m_orderType = newType; }

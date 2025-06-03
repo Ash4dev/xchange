@@ -45,8 +45,8 @@ public:
   OrderBook(OrderBook &ob); // copy constructor
 
   // made static since stay same across all instances
-  static Price decodePriceFromOrderID(OrderID orderID);
-  static Side::Side decodeSideFromOrderID(OrderID orderID);
+  static Price decodePriceFromOrderID(const OrderID orderID);
+  static Side::Side decodeSideFromOrderID(const OrderID orderID);
 
   // core functionality of orderbook
   std::optional<Trade> AddOrder(Order &order);

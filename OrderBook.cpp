@@ -52,13 +52,13 @@
 //   return addT1 <= addT2;
 // }
 //
-Side::Side OrderBook::decodeSideFromOrderID(OrderID orderID) {
+Side::Side OrderBook::decodeSideFromOrderID(const OrderID orderID) {
   return ((orderID & 0x1)
               ? Side::Side::Buy
               : Side::Side::Sell); // side is the last bit of orderID
 }
 
-Price OrderBook::decodePriceFromOrderID(OrderID orderID) {
+Price OrderBook::decodePriceFromOrderID(const OrderID orderID) {
   // last bit is not imp for price information
   // & with all 1s retains on bits (can't store floats: so int)
   // this mask is not the same as UINT32_MAX
@@ -79,19 +79,29 @@ std::optional<Trade> OrderBook::AddOrder(Order &order) {
   }
 
   Side::Side side = order.getSide();
-
-  // if (order.getOrderType() == OrderType::OrderType::Market){
-  //   if (side == Side::Side::Buy){
-  //     int newPrice = order.getPrice();
-  //     if (!m_asks.empty()){newPrice = (*m_asks.rbegin()).first;}
-  //     // if not matched immeadiately, converts into a limit order
-  //     if (m_asks.empty())
-  //     {order.setOrderType(OrderType::OrderType::GoodTillCancel);}
-  //   }
-  //   order.setPrice(Price newPrice)
-  // }
-
   Price price = order.getPrice();
+
+  // handling any market order matching (timing by preprocessor)
+  if (order.getOrderType() == OrderType::OrderType::Market ||
+      order.getOrderType() == OrderType::OrderType::MarketOnClose ||
+      order.getOrderType() == OrderType::OrderType::MarketOnOpen) {
+
+    if (side == Side::Side::Buy) {
+      if (!m_asks.empty()) {
+        // make capable enough to match with the worst ask
+        // asks above it get fulfilled (may not last till worst)
+        Price newPrice = (*m_asks.rbegin()).first;
+        order.setPrice(newPrice);
+      }
+    } else {
+      if (!m_bids.empty()) {
+        Price newPrice = (*m_bids.rbegin()).first; // same logic as bids
+        order.setPrice(newPrice);
+      }
+    }
+    // the order becomes a limit order now
+    order.setOrderType(OrderType::OrderType::GoodTillCancel);
+  }
 
   if (side == Side::Side::Buy) { // if a bid placed, check on ask (vice-versa)
     if (m_bids.find(price) == m_bids.end()) { // if price level not exists

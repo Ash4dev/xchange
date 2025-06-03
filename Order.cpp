@@ -2,13 +2,33 @@
 #include "utils/Constants.h"
 #include "utils/alias/Fundamental.h"
 
+#include <chrono>
 #include <cstdint>
 #include <ctime>
 #include <iomanip>
+#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <stdexcept>
 
 #define PRICE_MULTIPLIER 100
+
+std::string
+Order::returnReadableTime(const std::chrono::system_clock::time_point &tt) {
+  std::time_t tamatch = std::chrono::system_clock::to_time_t(tt);
+  std::tm *ptamatch = std::localtime(&tamatch); // local time conversion
+
+  std::stringstream ss;
+  ss << std::put_time(ptamatch, "%Y-%m-%d %H:%M:%S");
+  std::string ans = ss.str();
+  return ans;
+}
+
+const void Order::printTimeInfo() const {
+  std::cout << "activate: " << returnReadableTime(m_activateTime)
+            << " deactivate: " << returnReadableTime(m_deactivateTime)
+            << std::endl;
+}
 
 Order::Order(const Symbol symbol, OrderType::OrderType orderType,
              Side::Side side, double price, Quantity quantity,
@@ -35,11 +55,11 @@ Order::Order(const Symbol symbol, OrderType::OrderType orderType,
                                 : convertDateTimeToTimeStamp(deactivationTime));
 
   // market orders ensure execution at prevailing price
-  if (orderType == OrderType::OrderType::Market ||
-      orderType == OrderType::OrderType::MarketOnOpen ||
-      orderType == OrderType::OrderType::MarketOnClose) {
-    m_price = Constants::InvalidPrice;
-  }
+  // if (orderType == OrderType::OrderType::Market ||
+  //     orderType == OrderType::OrderType::MarketOnOpen ||
+  //     orderType == OrderType::OrderType::MarketOnClose) {
+  //   m_price = Constants::InvalidPrice;
+  // }
 }
 
 TimeStamp Order::convertDateTimeToTimeStamp(const std::string &dateTime) {
@@ -54,6 +74,14 @@ TimeStamp Order::convertDateTimeToTimeStamp(const std::string &dateTime) {
   ss >> std::get_time(&time, "%d-%m-%Y %H:%M:%S");
   if (ss.fail())
     throw std::runtime_error("Time could NOT be parsed");
+
+  // std::cout << "Parsed tm: "
+  //           << "Day=" << time.tm_mday << ", "
+  //           << "Month=" << time.tm_mon + 1 << ", "
+  //           << "Year=" << time.tm_year + 1900 << ", "
+  //           << "Hour=" << time.tm_hour << ", "
+  //           << "Min=" << time.tm_min << ", "
+  //           << "Sec=" << time.tm_sec << std::endl;
 
   // returns no of secs from UNIX epoch (32 bit) -> 2038 till
   // TODO: check out and integrate __time64_t
@@ -82,7 +110,7 @@ OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid) {
 
   // timestamp at ns scale provides enough uniqueness
   // hence no random number used in orderID
-  std::uint64_t timestamp = m_timestamp.time_since_epoch().count();
+  std::uint64_t timestamp = time.time_since_epoch().count();
 
   // interpretation of encodeOrderID
   // bit 63-32: timestamp (uniqueness at ns scale)

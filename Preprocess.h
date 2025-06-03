@@ -15,21 +15,29 @@
 
 class PreProcessor {
 public:
-  PreProcessor();
+  PreProcessor(std::string &symbol);
 
   struct OrderActionInfo {
     // no point in carrying around whole order
     // pointer to it will be enough
     OrderPointer orderptr;
-    bool is_add;
+    bool action; // 1 -> buy
 
-    OrderActionInfo(OrderPointer &orderptr, bool insert)
-        : orderptr{orderptr}, is_add(insert) {};
+    OrderActionInfo(OrderPointer &orderptr, bool action)
+        : orderptr{orderptr}, action(action) {};
+
+    bool operator<(const OrderActionInfo &other) const {
+      return ((*(this->orderptr)) < (*(other.orderptr)));
+    }
   };
 
-  // named from the context of user of end point
-  void InsertOrderInOrderBook(Order &order);
-  void RemoveOrderFromOrderBook(OrderID &orderId, OrderBook &orderbook);
+  std::string getType(OrderType::OrderType type);
+  void printPreProcessorStatus();
+
+  void AddOrderInOrderBook(Order &order);
+  void CancelOrderFromOrderBook(const OrderID &orderId, OrderBook &orderbook);
+  void ModifyOrderFromOrderBook(const OrderID &oldID, OrderBook &orderbook,
+                                Order &newOrder);
 
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue(OrderBook &orderbook);
@@ -41,6 +49,7 @@ public:
 private:
   // m_typeRank determines index in vector (uniformity)
   static std::unordered_map<OrderType::OrderType, int> m_typeRank;
+  static std::unordered_map<int, OrderType::OrderType> m_rankType;
 
   const size_t MAX_PENDING_ORDERS_THRESHOLD = 50;
   const std::chrono::milliseconds MAX_PENDING_DURATION =
