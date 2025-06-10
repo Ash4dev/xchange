@@ -1,3 +1,4 @@
+// modern header guards: https://stackoverflow.com/a/5777009
 #pragma once
 
 #include <cassert>
