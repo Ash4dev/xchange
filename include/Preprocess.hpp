@@ -34,9 +34,8 @@ public:
   void printPreProcessorStatus();
 
   void AddOrderInOrderBook(Order &order);
-  void CancelOrderFromOrderBook(const OrderID &orderId, OrderBook &orderbook);
-  void ModifyOrderFromOrderBook(const OrderID &oldID, OrderBook &orderbook,
-                                Order &newOrder);
+  void CancelOrderFromOrderBook(const OrderID &orderId);
+  void ModifyOrderFromOrderBook(const OrderID &oldID, Order &newOrder);
 
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue(OrderBook &orderbook);
@@ -50,7 +49,7 @@ private:
   static std::unordered_map<OrderType::OrderType, int> m_typeRank;
   static std::unordered_map<int, OrderType::OrderType> m_rankType;
 
-  const size_t MAX_PENDING_ORDERS_THRESHOLD = 50;
+  const std::size_t MAX_PENDING_ORDERS_THRESHOLD = 50;
   const std::chrono::milliseconds MAX_PENDING_DURATION =
       std::chrono::milliseconds(1000);
   std::chrono::system_clock::time_point m_lastFlushTime;

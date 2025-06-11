@@ -69,19 +69,22 @@ TimeStamp Order::convertDateTimeToTimeStamp(const std::string &dateTime) {
 
   // 24 hr format, 0-11 months, 2024->124 aka (2024-1900)
   // https://cplusplus.com/reference/ctime/tm/
-  std::tm time;
+  std::tm time = {}; // always init fully (earlier garbage value of 13)
   // parses string in given datetime fmt (opt to std::tm obj)
   ss >> std::get_time(&time, "%d-%m-%Y %H:%M:%S");
   if (ss.fail())
     throw std::runtime_error("Time could NOT be parsed");
 
-  // std::cout << "Parsed tm: "
-  //           << "Day=" << time.tm_mday << ", "
-  //           << "Month=" << time.tm_mon + 1 << ", "
-  //           << "Year=" << time.tm_year + 1900 << ", "
-  //           << "Hour=" << time.tm_hour << ", "
-  //           << "Min=" << time.tm_min << ", "
-  //           << "Sec=" << time.tm_sec << std::endl;
+  // cause of sparring execution (13 somehow)
+  time.tm_isdst = -1; // let sys decide if daylight saving applicable
+  std::cout << "Parsed tm: "
+            << "Day=" << time.tm_mday << ", "
+            << "Month=" << time.tm_mon + 1 << ", "
+            << "Year=" << time.tm_year + 1900 << ", "
+            << "Hour=" << time.tm_hour << ", "
+            << "Min=" << time.tm_min << ", "
+            << "Sec=" << time.tm_sec << ", "
+            << "DST: " << time.tm_isdst << std::endl;
 
   // returns no of secs from UNIX epoch (32 bit) -> 2038 till
   // TODO: check out and integrate __time64_t

@@ -18,7 +18,8 @@ public:
   const OrderTraded &getMatchedAsk() const { return m_askMatch; }
   const TimeStamp getMatchTime() const { return m_timeMatch; }
 
-  const void printMatchTime() const {
+  // since returns void no sense of const
+  void printMatchTime() const {
     std::time_t tmatch = std::chrono::system_clock::to_time_t(m_timeMatch);
     std::tm *ptmatch = std::localtime(&tmatch); // local time conversion
     // not used to return string since put_time return value is undefined void?

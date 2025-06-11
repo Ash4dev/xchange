@@ -3,6 +3,7 @@
 #include "utils/alias/OrderRel.hpp"
 #include "utils/enums/OrderTypes.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <ostream>
 #include <set>
@@ -48,8 +49,7 @@ void PreProcessor::AddOrderInOrderBook(Order &order) {
   seenOrders[orderptr->getOrderID()] = orderptr;
 }
 
-void PreProcessor::CancelOrderFromOrderBook(const OrderID &orderId,
-                                            OrderBook &orderbook) {
+void PreProcessor::CancelOrderFromOrderBook(const OrderID &orderId) {
   // alt1: encode all info of order class into orderID (less space, poor
   // scalability) alt2: maintain unordered_map<OrderID, OrderPointer> (more
   // space, no collision) go with alt2: attribute scalable, lesser debug issues
@@ -64,10 +64,9 @@ void PreProcessor::CancelOrderFromOrderBook(const OrderID &orderId,
 }
 
 void PreProcessor::ModifyOrderFromOrderBook(const OrderID &oldID,
-                                            OrderBook &orderbook,
                                             Order &newOrder) {
   // modify not shown explicitly since linear combination
-  CancelOrderFromOrderBook(oldID, orderbook);
+  CancelOrderFromOrderBook(oldID);
   AddOrderInOrderBook(newOrder);
 }
 
@@ -97,8 +96,8 @@ void PreProcessor::EmptyWaitQueue(OrderBook &orderbook) {
 
 void PreProcessor::TryFlush(OrderBook &orderbook) {
   // qty buffered
-  int totalBufferedOrders = 0;
-  for (const std::multiset<OrderActionInfo> typeRankedOrders :
+  std::size_t totalBufferedOrders = 0;
+  for (const std::multiset<OrderActionInfo> &typeRankedOrders :
        m_laterProcessOrders) {
     totalBufferedOrders += typeRankedOrders.size();
   }
@@ -131,7 +130,7 @@ void PreProcessor::printPreProcessorStatus() {
   std::cout << "LATER QUEUES" << std::endl;
 
   // why does std::views::enumerate fail? no member views in std
-  for (int idx = 0; idx < m_laterProcessOrders.size(); idx++) {
+  for (std::size_t idx = 0; idx < m_laterProcessOrders.size(); idx++) {
     auto ms = m_laterProcessOrders[idx];
     std::cout << "type: " << getType(m_rankType[idx]) << " size: " << ms.size()
               << std::endl;

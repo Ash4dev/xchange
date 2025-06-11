@@ -34,6 +34,9 @@ int main() {
   PreProcessor askpreProcessor = PreProcessor(symbol);
   OrderBook orderBook = OrderBook(symbol);
 
+  // PreProcessor && orderBook must stay connected somehow else
+  // not able to do insert and stuff
+
   Order o1 = Order(symbol, OrderType::OrderType::GoodTillCancel,
                    Side::Side::Buy, 90.39, 20);
   bidpreProcessor.AddOrderInOrderBook(o1);
@@ -50,11 +53,11 @@ int main() {
   Order o5 =
       Order("A", OrderType::OrderType::FillOrKill, Side::Side::Sell, 92.43, 43);
   askpreProcessor.AddOrderInOrderBook(o5);
-  askpreProcessor.CancelOrderFromOrderBook(o4.getOrderID(), orderBook);
+  askpreProcessor.CancelOrderFromOrderBook(o4.getOrderID());
   Order o6 = Order("A", OrderType::OrderType::ImmediateOrCancel,
                    Side::Side::Buy, 97.37, 21);
   bidpreProcessor.AddOrderInOrderBook(o6);
-  bidpreProcessor.CancelOrderFromOrderBook(o4.getOrderID(), orderBook);
+  bidpreProcessor.CancelOrderFromOrderBook(o4.getOrderID());
 
   std::cout << "BIDS" << std::endl;
   bidpreProcessor.printPreProcessorStatus();
