@@ -1,6 +1,6 @@
-#include "Order.h"
-#include "utils/Constants.h"
-#include "utils/alias/Fundamental.h"
+#include "include/Order.hpp"
+#include "utils/Constants.hpp"
+#include "utils/alias/Fundamental.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -24,7 +24,7 @@ Order::returnReadableTime(const std::chrono::system_clock::time_point &tt) {
   return ans;
 }
 
-const void Order::printTimeInfo() const {
+void Order::printTimeInfo() const {
   std::cout << "activate: " << returnReadableTime(m_activateTime)
             << " deactivate: " << returnReadableTime(m_deactivateTime)
             << std::endl;
@@ -102,7 +102,6 @@ Order::Order(const Order &other)
       m_deactivateTime{other.getDeactivationTime()} {}
 
 OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid) {
-  assert(intPrice * 2 <= UINT32_MAX);
 
   // https://stackoverflow.com/a/31553641
   // steady_clock: stopwatch, system_clock: timestamp

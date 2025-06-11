@@ -1,10 +1,9 @@
 #include <iostream>
 #include <optional>
 
-#include "Order.h"
-#include "OrderBook.h"
-#include "utils/enums/OrderTypes.h"
-#include "utils/enums/Side.h"
+#include "include/OrderBook.hpp"
+#include "utils/enums/OrderTypes.hpp"
+#include "utils/enums/Side.hpp"
 
 void printMatchedTrades(std::vector<std::optional<Trade>> &trades) {
   for (auto &MatchedTrade : trades) {

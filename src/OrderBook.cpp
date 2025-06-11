@@ -1,11 +1,12 @@
-#include "OrderBook.h"
-#include "Level.h"
-#include "Trade.h"
-#include "utils/alias/Fundamental.h"
-#include "utils/alias/LevelRel.h"
-#include "utils/alias/OrderRel.h"
-#include "utils/enums/OrderTypes.h"
-#include "utils/enums/Side.h"
+#include "include/OrderBook.hpp"
+#include "include/Level.hpp"
+#include "include/Trade.hpp"
+
+#include "utils/alias/Fundamental.hpp"
+#include "utils/alias/LevelRel.hpp"
+#include "utils/alias/OrderRel.hpp"
+#include "utils/enums/OrderTypes.hpp"
+#include "utils/enums/Side.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -13,45 +14,6 @@
 #include <memory>
 #include <optional>
 
-//
-// bool OrderBook::CancellationDueComparator::operator()(const OrderID
-// &orderID1,
-//                                                       const OrderID
-//                                                       &orderID2) {
-//   // when obj is defined as const, can't call non-const fn on it
-//   // to avoid any chance of modification to the original object
-//   Price price1 = decodePriceFromOrderID(orderID1);
-//   Side::Side side1 = decodeSideFromOrderID(orderID1);
-//   LevelPointer cancelL1 = orderBook->getLevelFromSideAndPrice(
-//       side1, price1); // TODO: what is this syntax ???
-//   TimeStamp cancelT1 = cancelL1->getDeactivationTime(orderID1);
-//
-//   Price price2 = decodePriceFromOrderID(orderID2);
-//   Side::Side side2 = decodeSideFromOrderID(orderID2);
-//   LevelPointer cancelL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
-//   TimeStamp cancelT2 = cancelL2->getDeactivationTime(orderID2);
-//
-//   return cancelT1 <= cancelT2;
-// }
-//
-// // TODO: can it be a single function w activation/deactivation as param?
-// (likely
-// // yes)
-// bool OrderBook::AdditionDueComparator::operator()(const OrderID &orderID1,
-//                                                   const OrderID &orderID2) {
-//   Price price1 = decodePriceFromOrderID(orderID1);
-//   Side::Side side1 = decodeSideFromOrderID(orderID1);
-//   LevelPointer addL1 = orderBook->getLevelFromSideAndPrice(side1, price1);
-//   TimeStamp addT1 = addL1->getActivationTime(orderID1);
-//
-//   Price price2 = decodePriceFromOrderID(orderID2);
-//   Side::Side side2 = decodeSideFromOrderID(orderID2);
-//   LevelPointer addL2 = orderBook->getLevelFromSideAndPrice(side2, price2);
-//   TimeStamp addT2 = addL2->getActivationTime(orderID2);
-//
-//   return addT1 <= addT2;
-// }
-//
 Side::Side OrderBook::decodeSideFromOrderID(const OrderID orderID) {
   return ((orderID & 0x1)
               ? Side::Side::Buy
@@ -78,15 +40,12 @@ std::optional<Trade> OrderBook::AddOrder(Order &order) {
     return std::nullopt; //  failure indicator
   }
 
-  Side::Side side = order.getSide();
-  Price price = order.getPrice();
-
   // handling any market order matching (timing by preprocessor)
   if (order.getOrderType() == OrderType::OrderType::Market ||
       order.getOrderType() == OrderType::OrderType::MarketOnClose ||
       order.getOrderType() == OrderType::OrderType::MarketOnOpen) {
 
-    if (side == Side::Side::Buy) {
+    if (order.getSide() == Side::Side::Buy) {
       if (!m_asks.empty()) {
         // make capable enough to match with the worst ask
         // asks above it get fulfilled (may not last till worst)
@@ -102,6 +61,9 @@ std::optional<Trade> OrderBook::AddOrder(Order &order) {
     // the order becomes a limit order now
     order.setOrderType(OrderType::OrderType::GoodTillCancel);
   }
+
+  Price price = order.getPrice();
+  Side::Side side = order.getSide();
 
   if (side == Side::Side::Buy) { // if a bid placed, check on ask (vice-versa)
     if (m_bids.find(price) == m_bids.end()) { // if price level not exists

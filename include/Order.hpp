@@ -1,14 +1,10 @@
 #pragma once
 
+#include "utils/alias/Fundamental.hpp"
+#include "utils/enums/OrderTypes.hpp"
+#include "utils/enums/Side.hpp"
 #include <cassert>
 #include <chrono>
-#include <cstdint>
-#include <stdexcept>
-
-#include ""
-#include "utils/alias/Fundamental.h"
-#include "utils/enums/OrderTypes.h"
-#include "utils/enums/Side.h"
 
 class Order {
 public:
@@ -42,7 +38,7 @@ public:
   TimeStamp getActivationTime() const { return m_activateTime; }
   TimeStamp getDeactivationTime() const { return m_deactivateTime; }
 
-  const void printTimeInfo() const;
+  void printTimeInfo() const;
 
   void setPrice(Price newPrice) { m_price = newPrice; }
   void setOrderType(OrderType::OrderType newType) { m_orderType = newType; }

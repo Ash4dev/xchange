@@ -1,11 +1,9 @@
 #pragma once
 
-#include "alias/Fundamental.h"
+#include "utils/alias/Fundamental.hpp"
 #include <chrono>
-#include <cstdint>
 #include <cstdlib>
 #include <ctime>
-#include <limits>
 
 struct Constants {
   // Orders with Market order are equivalent to GoodTillCancel(worst Price)
@@ -32,7 +30,6 @@ struct Constants {
     // Convert to std::chrono::system_clock::time_point
     return std::chrono::system_clock::from_time_t(tt);
   }();
-  ;
   // Runtime constant (initialized once at program startup)
   // discard Constants.cpp since more of obstruction than help
 };
