@@ -77,14 +77,14 @@ TimeStamp Order::convertDateTimeToTimeStamp(const std::string &dateTime) {
 
   // cause of sparring execution (13 somehow)
   time.tm_isdst = -1; // let sys decide if daylight saving applicable
-  std::cout << "Parsed tm: "
-            << "Day=" << time.tm_mday << ", "
-            << "Month=" << time.tm_mon + 1 << ", "
-            << "Year=" << time.tm_year + 1900 << ", "
-            << "Hour=" << time.tm_hour << ", "
-            << "Min=" << time.tm_min << ", "
-            << "Sec=" << time.tm_sec << ", "
-            << "DST: " << time.tm_isdst << std::endl;
+  // std::cout << "Parsed tm: "
+  //           << "Day=" << time.tm_mday << ", "
+  //           << "Month=" << time.tm_mon + 1 << ", "
+  //           << "Year=" << time.tm_year + 1900 << ", "
+  //           << "Hour=" << time.tm_hour << ", "
+  //           << "Min=" << time.tm_min << ", "
+  //           << "Sec=" << time.tm_sec << ", "
+  //           << "DST: " << time.tm_isdst << std::endl;
 
   // returns no of secs from UNIX epoch (32 bit) -> 2038 till
   // TODO: check out and integrate __time64_t
@@ -145,6 +145,15 @@ bool Order::operator<(const Order &other) const {
   if (m_timestamp != other.getOrderTime())
     return m_timestamp < other.getOrderTime();
   return m_remQuantity > other.getRemainingQuantity();
+}
+
+bool Order::operator==(const Order &other) const {
+  return m_symbol == other.m_symbol && m_orderType == other.m_orderType &&
+         m_side == other.m_side && m_price == other.m_price &&
+         m_remQuantity == other.m_remQuantity &&
+         m_timestamp == other.m_timestamp && m_orderID == other.m_orderID &&
+         m_activateTime == other.m_activateTime &&
+         m_deactivateTime == other.m_deactivateTime;
 }
 
 bool Order::isFullyFilled() { return (getRemainingQuantity() == 0); }

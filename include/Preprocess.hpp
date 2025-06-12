@@ -25,6 +25,10 @@ public:
     OrderActionInfo(OrderPointer &orderptr, bool action)
         : orderptr{orderptr}, action(action) {};
 
+    // if user-provided constructors exist
+    // user must define a default construct explicity
+    // cost me 3 hrs
+    OrderActionInfo() = default;
     bool operator<(const OrderActionInfo &other) const {
       return ((*(this->orderptr)) < (*(other.orderptr)));
     }
@@ -33,9 +37,10 @@ public:
   std::string getType(OrderType::OrderType type);
   void printPreProcessorStatus();
 
-  void AddOrderInOrderBook(Order &order);
-  void CancelOrderFromOrderBook(const OrderID &orderId);
-  void ModifyOrderFromOrderBook(const OrderID &oldID, Order &newOrder);
+  void InsertIntoPreprocessing(const OrderActionInfo &orderactinfo);
+  void InsertIntoPreprocessing(const Order &order, bool action);
+  void RemoveFromPreprocessing(const OrderID &orderId);
+  void ModifyInPreprocessing(const OrderID &oldID, Order &newOrder);
 
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue(OrderBook &orderbook);
@@ -60,7 +65,7 @@ private:
 
   // understand red-black-tree implementation for (un)ordered map
   // why O(1) query, insertion, removal?
-  std::unordered_map<OrderID, OrderPointer> seenOrders;
+  std::unordered_map<OrderID, OrderActionInfo> seenOrders;
 
   /* synchronous way
    * need bool isInsertOrRemove acts as lock

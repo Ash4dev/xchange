@@ -16,6 +16,7 @@ CPPFLAGS := -ggdb -O0 # extra files for compiler
 INC_DIR := include
 SRC_DIR := src
 UTILS_DIR := utils
+TESTS_DIR := tests
 
 OBJ_DIR := obj
 BIN_DIR := bin
@@ -35,9 +36,11 @@ TARGET_EXECUTABLE := $(BIN_DIR)/orderbook
 # can variable be defined in a rule during rule execution? yes
 # linking object files
 # for the time being tests/*.cpp used
-$(TARGET_EXECUTABLE): $(OBJ_FILES)
+# (used $< first: only level, $^: all pre-req redefinition of print trades)
+TEST_FILE := $(TESTS_DIR)/core-pre.cpp
+$(TARGET_EXECUTABLE): $(OBJ_FILES) $(TEST_FILE)
 	mkdir -p $(BIN_DIR);
-	$(CXX) $(CXXFLAGS) tests/core-ob.cpp $(OBJ_FILES) -o $@;
+	$(CXX) $(CXXFLAGS) $(TEST_FILE) $(OBJ_FILES) -o $@;
 
 # building object files (prepro + compile + assemble)
 # create OBJ DIR if non-existent (wo errors)
@@ -46,15 +49,24 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@;
 
 # run over even if all, run, clean files exist somehow
-.PHONY: all run clean test release
+.PHONY: all run clean fresh redo test release
 
-all: $(TARGET_EXECUTABLE) run
+# TARGET_EXECUTABLE run was not the issue works fine
+all: $(TARGET_EXECUTABLE)
 
 run: $(TARGET_EXECUTABLE)
 	./$(TARGET_EXECUTABLE);
 
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR);
+
+# redundant but names make sense
+# when change in final file/tests
+redo: all run
+
+# perform when change in include/src
+fresh: clean redo
+
 
 # HELPER COMMANDS
 
@@ -64,8 +76,8 @@ clean:
 # read:
 # https://www.baeldung.com/linux/read-command
 
+# single line execution ensures single shell
 project_structure:
-	# single line execution ensures single shell
 	@echo "Show only directories? [y/N]"; \
 	read -p "> " user_input; \
 	if [ "$$user_input" = "y" ] || [ "$$user_input" = "Y" ]; then \

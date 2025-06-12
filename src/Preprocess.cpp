@@ -41,33 +41,51 @@ std::unordered_map<int, OrderType::OrderType> PreProcessor::m_rankType = {
     {8, OrderType::OrderType::MarketOnOpen},
     {9, OrderType::OrderType::MarketOnClose}};
 
-void PreProcessor::AddOrderInOrderBook(Order &order) {
-  OrderPointer orderptr = std::make_shared<Order>(order);
-  int typeId = m_typeRank[orderptr->getOrderType()]; // get order rank
-  OrderActionInfo ordactinfo = OrderActionInfo(orderptr, true);
-  m_laterProcessOrders[typeId].insert(ordactinfo); // add to specific vector
-  seenOrders[orderptr->getOrderID()] = orderptr;
+void PreProcessor::InsertIntoPreprocessing(
+    const OrderActionInfo &orderactinfo) {
+  int typeId = m_typeRank[orderactinfo.orderptr->getOrderType()];
+  m_laterProcessOrders[typeId].insert(orderactinfo); // add to specific multiset
+  seenOrders[orderactinfo.orderptr->getOrderID()] = orderactinfo;
 }
 
-void PreProcessor::CancelOrderFromOrderBook(const OrderID &orderId) {
+void PreProcessor::InsertIntoPreprocessing(const Order &order, bool action) {
+  // orderptr, true: if add order into orderbook
+  // orderptr, false: if remove order from orderbook
+  OrderPointer orderptr = std::make_shared<Order>(order);
+  PreProcessor::OrderActionInfo ordactinfo =
+      PreProcessor::OrderActionInfo(orderptr, action);
+  PreProcessor::InsertIntoPreprocessing(ordactinfo);
+}
+
+void PreProcessor::RemoveFromPreprocessing(const OrderID &orderId) {
   // alt1: encode all info of order class into orderID (less space, poor
   // scalability) alt2: maintain unordered_map<OrderID, OrderPointer> (more
   // space, no collision) go with alt2: attribute scalable, lesser debug issues
   if (seenOrders.count(orderId) == 0)
     return;
-  OrderPointer orderptr = seenOrders[orderId];
+  OrderActionInfo corrordactinfo = seenOrders[orderId];
+  OrderPointer orderptr = corrordactinfo.orderptr;
   int typeId = m_typeRank[orderptr->getOrderType()];
-  OrderActionInfo ordactinfo = OrderActionInfo(orderptr, false);
-  // what if identical order add and cancel?? eliminate on spot -> write logic
-  m_laterProcessOrders[typeId].insert(ordactinfo); // insert to vector
-  seenOrders.erase(orderId); // no more use of storing seen order
+
+  // if identical order add and cancel?? eliminate on spot
+  if (m_laterProcessOrders[typeId].find(corrordactinfo) !=
+      m_laterProcessOrders[typeId].end()) {
+    m_laterProcessOrders[typeId].erase(corrordactinfo);
+    seenOrders.erase(orderId); // no more use of storing seen order
+    return;
+  }
+
+  // if already into orderbook, preprocess addition of cancel request
+  corrordactinfo.action = false;
+  seenOrders[orderId] = corrordactinfo;
+  PreProcessor::InsertIntoPreprocessing(corrordactinfo);
 }
 
-void PreProcessor::ModifyOrderFromOrderBook(const OrderID &oldID,
-                                            Order &newOrder) {
+void PreProcessor::ModifyInPreprocessing(const OrderID &oldID,
+                                         Order &newOrder) {
   // modify not shown explicitly since linear combination
-  CancelOrderFromOrderBook(oldID);
-  AddOrderInOrderBook(newOrder);
+  RemoveFromPreprocessing(oldID);
+  InsertIntoPreprocessing(newOrder, true);
 }
 
 void PreProcessor::QueueOrdersIntoWaitQueue() {
@@ -135,7 +153,9 @@ void PreProcessor::printPreProcessorStatus() {
     std::cout << "type: " << getType(m_rankType[idx]) << " size: " << ms.size()
               << std::endl;
     std::cout << "ORDERS: " << std::endl;
-    for (auto [ptr, action] : ms) {
+    for (auto &info : ms) {
+      OrderPointer ptr = info.orderptr;
+      bool action = info.action;
       std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
                 << " price: " << ptr->getPrice()
                 << " rem qty: " << ptr->getRemainingQuantity() << std::endl;

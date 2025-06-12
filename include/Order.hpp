@@ -23,6 +23,7 @@ public:
   OrderID encodeOrderID(TimeStamp timestamp, Price price, bool isBid);
 
   bool operator<(const Order &other) const;
+  bool operator==(const Order &other) const;
 
   void FillPartially(Quantity quantity);
   bool isFullyFilled();
