@@ -41,8 +41,11 @@ public:
 
   void printTimeInfo() const;
 
+  void setQuantity(Quantity newqty) { m_remQuantity = newqty; }
   void setPrice(Price newPrice) { m_price = newPrice; }
   void setOrderType(OrderType::OrderType newType) { m_orderType = newType; }
+  void setActivationTime(TimeStamp newtime) { m_activateTime = newtime; }
+  void setDeactivationTime(TimeStamp newtime) { m_deactivateTime = newtime; }
 
 private:
   Symbol m_symbol;

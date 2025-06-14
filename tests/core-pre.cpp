@@ -1,6 +1,5 @@
 #include <iostream>
 #include <memory>
-#include <optional>
 #include <ostream>
 
 #include "include/Order.hpp"
@@ -8,22 +7,6 @@
 #include "include/Preprocess.hpp"
 #include "utils/enums/OrderTypes.hpp"
 #include "utils/enums/Side.hpp"
-
-void printMatchedTrades(std::vector<std::optional<Trade>> &trades) {
-  for (auto &MatchedTrade : trades) {
-    if (!MatchedTrade.has_value()) {
-      std::cout << "No Matches at the moment" << std::endl;
-      std::cout << "|||||||||||||||||||" << std::endl;
-      continue;
-    }
-    MatchedTrade->printMatchTime();
-    std::cout << MatchedTrade->getMatchedBid().price << " "
-              << MatchedTrade->getMatchedBid().quantityFilled << " "
-              << MatchedTrade->getMatchedBid().orderID << " "
-              << MatchedTrade->getMatchedAsk().orderID << std::endl;
-    std::cout << "|||||||||||||||||||" << std::endl;
-  }
-}
 
 int main() {
 
@@ -92,5 +75,17 @@ int main() {
   std::cout << "ASKS" << std::endl;
   askpreProcessor.printPreProcessorStatus();
   std::cout << std::endl;
+
+  std::cout << "ORDERBOOK STATE" << std::endl;
+  orderbookPtr->printOrderBookState();
+  std::cout << std::endl;
+
+  std::cout << "BIDS" << std::endl;
+  bidpreProcessor.printPreProcessorStatus();
+  std::cout << std::endl;
+  std::cout << "ASKS" << std::endl;
+  askpreProcessor.printPreProcessorStatus();
+  std::cout << std::endl;
+
   return 0;
 }

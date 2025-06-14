@@ -46,6 +46,7 @@ public:
   void RemoveFromPreprocessing(const OrderID &orderId);
   void ModifyInPreprocessing(const OrderID &oldID, Order &newOrder);
 
+  bool canMatchOrder(const OrderPointer &orderptr);
   void EmptyTypeRankedOrders(std::multiset<OrderActionInfo> &typeRankedOrders);
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue();

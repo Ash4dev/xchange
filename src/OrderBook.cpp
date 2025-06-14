@@ -123,26 +123,6 @@ std::optional<Trade> OrderBook::ModifyOrder(OrderID orderID,
   return OrderBook::AddOrder(modifiedOrder);
 }
 
-// act as check before matching TODO: where the hell is it used??
-bool OrderBook::CanMatchOrder(Side::Side side, Price price) const {
-  // ternary operator fails for incompatible types
-  // m_bids and m_asks are incompatible types: comparators
-
-  if (side == Side::Side::Buy) { // if a bid, match w asks (vice-versa)
-    if (m_asks.empty())          // no ask no match
-      return false;
-    LevelPointer bestAskLevelPointer =
-        (*m_asks.begin()).second; // find best ask
-    return (price >=
-            bestAskLevelPointer->getPrice()); // bid >= ask (trade occur)
-  } else {
-    if (m_bids.empty())
-      return false;
-    LevelPointer bestBidLevelPointer = (*m_bids.begin()).second;
-    return (price <= bestBidLevelPointer->getPrice());
-  }
-}
-
 // https://www.learncpp.com/cpp-tutorial/stdoptional/
 std::optional<Trade> OrderBook::MatchPotentialOrders() {
 
@@ -206,7 +186,10 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
                        filledQuantity};
   OrderTraded askTrade{bestAskOrder->getOrderID(), settlementPrice,
                        filledQuantity};
-  return Trade{bidTrade, askTrade};
+
+  Trade trade = Trade{bidTrade, askTrade};
+  m_trades.push_back(trade); // store trades
+  return trade;
 }
 
 void OrderBook::printOrderBookState(const std::string &message) {
@@ -218,13 +201,26 @@ void OrderBook::printOrderBookState(const std::string &message) {
     std::cout << lev->getPrice() << " " << lev->getQuantity() << " "
               << lev->getOrderList().size() << std::endl;
   }
+  std::cout << "----------DONE------------" << std::endl << std::endl;
+
   std::cout << "----------ASK------------" << std::endl;
 
-  std::cout << "ASK" << std::endl;
   for (auto &ele : OrderBook::getAskLevels()) {
     auto &lev = ele.second;
     std::cout << lev->getPrice() << " " << lev->getQuantity() << " "
               << lev->getOrderList().size() << std::endl;
   }
-  std::cout << "----------DONE------------" << std::endl;
+  std::cout << "----------DONE------------" << std::endl << std::endl;
+
+  std::cout << "---------TRADES-----------" << std::endl;
+  for (auto &MatchedTrade : OrderBook::getTrades()) {
+    MatchedTrade.printMatchTime();
+    std::cout << "price: " << MatchedTrade.getMatchedBid().price
+              << " filledqty: " << MatchedTrade.getMatchedBid().quantityFilled
+              << " bidOrderID: " << MatchedTrade.getMatchedBid().orderID
+              << " askOrderID: " << MatchedTrade.getMatchedAsk().orderID
+              << std::endl;
+    std::cout << "|||||||||||||||||||" << std::endl;
+  }
+  std::cout << "----------DONE------------" << std::endl << std::endl;
 }

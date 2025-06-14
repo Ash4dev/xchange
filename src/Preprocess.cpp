@@ -3,6 +3,7 @@
 #include "utils/alias/Fundamental.hpp"
 #include "utils/alias/OrderRel.hpp"
 #include "utils/enums/OrderTypes.hpp"
+#include "utils/enums/Side.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -21,32 +22,6 @@ PreProcessor::PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr,
   m_lastFlushTime = std::chrono::system_clock::now();
 }
 
-std::unordered_map<OrderType::OrderType, int> PreProcessor::m_typeRank = {
-    // ordered this way to minimize waiting time for priority orders
-    {OrderType::OrderType::Market, 0},
-    {OrderType::OrderType::FillOrKill, 1},
-    {OrderType::OrderType::ImmediateOrCancel, 2},
-    {OrderType::OrderType::GoodAfterTime, 3},
-    {OrderType::OrderType::GoodForDay, 4},
-    {OrderType::OrderType::GoodTillDate, 5},
-    {OrderType::OrderType::AllOrNone, 6},
-    {OrderType::OrderType::GoodTillCancel, 7},
-    // normally loop till 7, push if cond satisfied (special types)
-    {OrderType::OrderType::MarketOnOpen, 8},
-    {OrderType::OrderType::MarketOnClose, 9}};
-
-std::unordered_map<int, OrderType::OrderType> PreProcessor::m_rankType = {
-    {0, OrderType::OrderType::Market},
-    {1, OrderType::OrderType::FillOrKill},
-    {2, OrderType::OrderType::ImmediateOrCancel},
-    {3, OrderType::OrderType::GoodAfterTime},
-    {4, OrderType::OrderType::GoodForDay},
-    {5, OrderType::OrderType::GoodTillDate},
-    {6, OrderType::OrderType::AllOrNone},
-    {7, OrderType::OrderType::GoodTillCancel},
-    {8, OrderType::OrderType::MarketOnOpen},
-    {9, OrderType::OrderType::MarketOnClose}};
-
 void PreProcessor::InsertIntoPreprocessing(
     const OrderActionInfo &orderactinfo) {
   int typeId = m_typeRank[orderactinfo.orderptr->getOrderType()];
@@ -61,6 +36,17 @@ void PreProcessor::InsertIntoPreprocessing(const Order &order, bool action) {
   OrderPointer orderptr = std::make_shared<Order>(order);
   PreProcessor::OrderActionInfo ordactinfo =
       PreProcessor::OrderActionInfo(orderptr, action);
+
+  OrderType::OrderType otype = orderptr->getOrderType();
+
+  // need to set deactivate time for GoodForDay orders
+  // others have correctly filled activate & deactivate times
+  if (otype == OrderType::OrderType::GoodForDay) {
+    if (!PreProcessor::canTrade())
+      return; // don't insert if market closed
+    orderptr->setDeactivationTime(PreProcessor::getNextCloseTime());
+  }
+
   PreProcessor::InsertIntoPreprocessing(ordactinfo);
 }
 
@@ -96,18 +82,166 @@ void PreProcessor::ModifyInPreprocessing(const OrderID &oldID,
   InsertIntoPreprocessing(newOrder, true);
 }
 
-bool PreProcessor::isHoliday(const TimeStamp &time) {
-  using namespace std::chrono;
-  auto dp = floor<days>(time);
-  year_month_day ymd{dp};
+void PreProcessor::TryFlush() {
+  // qty buffered
+  std::size_t totalBufferedOrders = 0;
+  for (const std::multiset<OrderActionInfo> &typeRankedOrders :
+       m_laterProcessOrders) {
+    totalBufferedOrders += typeRankedOrders.size();
+  }
 
-  for (const auto &[d, m, y] : m_holidays) {
-    if (ymd.day() == day{d} && ymd.month() == month{m} &&
-        ymd.year() == year{y}) {
-      return true;
+  // time interval
+  auto now = std::chrono::system_clock::now();
+  auto durationSinceLastFlush =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now -
+                                                            m_lastFlushTime);
+
+  // hybrid flush model: qty or time interval (synchronous)
+  if (totalBufferedOrders >= MAX_PENDING_ORDERS_THRESHOLD ||
+      durationSinceLastFlush >= MAX_PENDING_DURATION) {
+    QueueOrdersIntoWaitQueue();
+    EmptyWaitQueue();
+    m_lastFlushTime = now;
+  }
+}
+
+void PreProcessor::QueueOrdersIntoWaitQueue() {
+  auto now = std::chrono::system_clock::now();
+  auto now_min = std::chrono::time_point_cast<std::chrono::minutes>(now);
+
+  // handle MarketOnClose & MarketOnOpen order types first
+  if (now_min == PreProcessor::getNextCloseTime())
+    PreProcessor::EmptyTypeRankedOrders(
+        m_laterProcessOrders[m_typeRank[OrderType::OrderType::MarketOnClose]]);
+  if (now_min == PreProcessor::getNextOpenTime())
+    PreProcessor::EmptyTypeRankedOrders(
+        m_laterProcessOrders[m_typeRank[OrderType::OrderType::MarketOnOpen]]);
+
+  for (std::size_t i = 0; i + 2 < m_laterProcessOrders.size(); i++) {
+    PreProcessor::EmptyTypeRankedOrders(m_laterProcessOrders[i]);
+  }
+}
+
+Quantity qtyAvailableForMatch(const OrderPointer &orderptr,
+                              const OrderBook &orderbook) {
+  Price price = orderptr->getPrice();
+  Side::Side side = orderptr->getSide();
+
+  Quantity qtyAvailable = 0;
+  if (side == Side::Side::Buy) {
+    // For BUY orders: match against ASK levels (ask_price <= bid_price)
+    const auto &levels = orderbook.getAskLevels();
+    for (const auto &[ask_price, level] : levels) {
+      if (ask_price > price)
+        break; // Stop if ask price exceeds bid price
+      qtyAvailable += level->getQuantity();
+    }
+  } else {
+    // For SELL orders: match against BID levels (bid_price >= ask_price)
+    const auto &levels = orderbook.getBidLevels();
+    for (const auto &[bid_price, level] : levels) {
+      if (bid_price < price)
+        break; // Stop if bid price below ask price
+      qtyAvailable += level->getQuantity();
     }
   }
-  return false;
+  return qtyAvailable;
+}
+
+bool PreProcessor::canMatchOrder(const OrderPointer &orderptr) {
+  // action is add by default
+  OrderType::OrderType otype = orderptr->getOrderType();
+
+  // no conditions on these order types
+  if (otype == OrderType::OrderType::Market ||
+      otype == OrderType::OrderType::GoodTillCancel)
+    return true;
+
+  auto now = std::chrono::system_clock::now();
+
+  if (otype == OrderType::OrderType::GoodAfterTime) {
+    return (now >= orderptr->getActivationTime());
+  }
+
+  if (otype == OrderType::OrderType::GoodForDay ||
+      otype == OrderType::OrderType::GoodTillDate) {
+    if (now < orderptr->getDeactivationTime()) // fine if not deactivated
+      return true;
+
+    // deactivated no more point keeping it
+    PreProcessor::RemoveFromPreprocessing(orderptr->getOrderID());
+    return false;
+  }
+
+  Quantity qtyAvailable =
+      qtyAvailableForMatch(orderptr, *PreProcessor::m_orderbookPtr);
+  if (otype == OrderType::OrderType::FillOrKill ||
+      otype == OrderType::OrderType::AllOrNone) {
+    // more quantity should be available on the other side
+    if (qtyAvailable >= orderptr->getRemainingQuantity())
+      return true;
+
+    // no point in keeping fok order if not executable now
+    if (otype == OrderType::OrderType::FillOrKill)
+      PreProcessor::RemoveFromPreprocessing(orderptr->getOrderID());
+    return false;
+  }
+  if (otype == OrderType::OrderType::ImmediateOrCancel) {
+    Quantity finalQuantity =
+        std::min(qtyAvailable, orderptr->getRemainingQuantity());
+    orderptr->setQuantity(finalQuantity); // rest is effectively cancelled
+    return true;
+  }
+
+  return false; // don't add prevents wrong matching atleast
+}
+
+void PreProcessor::EmptyTypeRankedOrders(
+    std::multiset<OrderActionInfo> &typeRankedOrders) {
+
+  std::vector<OrderActionInfo> insertedinWaitQueue;
+  for (const OrderActionInfo &orderactinfo : typeRankedOrders) {
+    // cancel order can always be inserted into orderbook
+    // if to be added but can't be matched no sense in putting to wait queue
+    if (orderactinfo.action &&
+        !PreProcessor::canMatchOrder(orderactinfo.orderptr))
+      continue;
+    m_waitQueue.push(orderactinfo);
+    insertedinWaitQueue.push_back(orderactinfo);
+  }
+
+  // clear these orders no longer in preprocessor but in wait queue
+  for (auto &orderactinfo : insertedinWaitQueue) {
+    typeRankedOrders.erase(typeRankedOrders.find(orderactinfo));
+  }
+}
+
+void PreProcessor::EmptyWaitQueue() {
+  // manual override for experimentation purpose
+  // since today (Jun 14 Saturday) market is closed
+  // test: successful
+
+  if (!PreProcessor::canTrade()) { // can't send into orderbook if closed
+    // std::cout << "Market Closed :(" << std::endl;
+    return;
+  }
+  while (!m_waitQueue.empty()) {
+    auto &[topOdrptr, isadd] = m_waitQueue.front();
+    m_waitQueue.pop();
+    if (isadd)
+      m_orderbookPtr->AddOrder(*topOdrptr);
+    else
+      m_orderbookPtr->CancelOrder(topOdrptr->getOrderID());
+  }
+}
+
+void PreProcessor::ClearSeenOrdersWhenMatched(
+    std::vector<OrderID> &matchedIDs) {
+  for (auto id : matchedIDs) {
+    if (!seenOrders.count(id))
+      continue;
+    seenOrders.erase(id);
+  }
 }
 
 bool PreProcessor::canTrade() {
@@ -132,6 +266,20 @@ bool PreProcessor::canTrade() {
   auto market_close = hours(15) + minutes(30);
 
   return tod >= market_open && tod < market_close;
+}
+
+bool PreProcessor::isHoliday(const TimeStamp &time) {
+  using namespace std::chrono;
+  auto dp = floor<days>(time);
+  year_month_day ymd{dp};
+
+  for (const auto &[d, m, y] : m_holidays) {
+    if (ymd.day() == day{d} && ymd.month() == month{m} &&
+        ymd.year() == year{y}) {
+      return true;
+    }
+  }
+  return false;
 }
 
 TimeStamp PreProcessor::getNextMarketTime(bool isOpen) {
@@ -167,85 +315,6 @@ TimeStamp PreProcessor::getNextMarketTime(bool isOpen) {
   return target_time;
 }
 
-void PreProcessor::QueueOrdersIntoWaitQueue() {
-  auto now = std::chrono::system_clock::now();
-  auto now_min = std::chrono::time_point_cast<std::chrono::minutes>(now);
-
-  // handle MarketOnClose & MarketOnOpen order types first
-  if (now_min == PreProcessor::getNextCloseTime())
-    PreProcessor::EmptyTypeRankedOrders(
-        m_laterProcessOrders[m_typeRank[OrderType::OrderType::MarketOnClose]]);
-  if (now_min == PreProcessor::getNextOpenTime())
-    PreProcessor::EmptyTypeRankedOrders(
-        m_laterProcessOrders[m_typeRank[OrderType::OrderType::MarketOnOpen]]);
-
-  for (std::size_t i = 0; i + 2 < m_laterProcessOrders.size(); i++) {
-    PreProcessor::EmptyTypeRankedOrders(m_laterProcessOrders[i]);
-  }
-}
-
-void PreProcessor::EmptyTypeRankedOrders(
-    std::multiset<OrderActionInfo> &typeRankedOrders) {
-
-  std::vector<OrderActionInfo> insertedinWaitQueue;
-  for (const OrderActionInfo &orderactinfo : typeRankedOrders) {
-    m_waitQueue.push(orderactinfo);
-    insertedinWaitQueue.push_back(orderactinfo);
-  }
-
-  // clear these orders no longer in preprocessor but in wait queue
-  for (auto &orderactinfo : insertedinWaitQueue) {
-    typeRankedOrders.erase(typeRankedOrders.find(orderactinfo));
-  }
-}
-
-void PreProcessor::EmptyWaitQueue() {
-  if (!PreProcessor::canTrade()) { // can't send into orderbook if market closed
-    // std::cout << "Market Closed :(" << std::endl;
-    return;
-  }
-  while (!m_waitQueue.empty()) {
-    auto &[topOdrptr, isadd] = m_waitQueue.front();
-    m_waitQueue.pop();
-    if (isadd)
-      m_orderbookPtr->AddOrder(*topOdrptr);
-    else
-      m_orderbookPtr->CancelOrder(topOdrptr->getOrderID());
-  }
-}
-
-void PreProcessor::TryFlush() {
-  // qty buffered
-  std::size_t totalBufferedOrders = 0;
-  for (const std::multiset<OrderActionInfo> &typeRankedOrders :
-       m_laterProcessOrders) {
-    totalBufferedOrders += typeRankedOrders.size();
-  }
-
-  // time interval
-  auto now = std::chrono::system_clock::now();
-  auto durationSinceLastFlush =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now -
-                                                            m_lastFlushTime);
-
-  // hybrid flush model: qty or time interval (synchronous)
-  if (totalBufferedOrders >= MAX_PENDING_ORDERS_THRESHOLD ||
-      durationSinceLastFlush >= MAX_PENDING_DURATION) {
-    QueueOrdersIntoWaitQueue();
-    EmptyWaitQueue();
-    m_lastFlushTime = now;
-  }
-}
-
-void PreProcessor::ClearSeenOrdersWhenMatched(
-    std::vector<OrderID> &matchedIDs) {
-  for (auto id : matchedIDs) {
-    if (!seenOrders.count(id))
-      continue;
-    seenOrders.erase(id);
-  }
-}
-
 void PreProcessor::printPreProcessorStatus() {
   std::cout << "LATER QUEUES" << std::endl;
 
@@ -279,6 +348,32 @@ void PreProcessor::printPreProcessorStatus() {
     copyOfWaitQueue.pop();
   }
 }
+
+std::unordered_map<OrderType::OrderType, int> PreProcessor::m_typeRank = {
+    // ordered this way to minimize waiting time for priority orders
+    {OrderType::OrderType::Market, 0},
+    {OrderType::OrderType::FillOrKill, 1},
+    {OrderType::OrderType::ImmediateOrCancel, 2},
+    {OrderType::OrderType::GoodAfterTime, 3},
+    {OrderType::OrderType::GoodForDay, 4},
+    {OrderType::OrderType::GoodTillDate, 5},
+    {OrderType::OrderType::AllOrNone, 6},
+    {OrderType::OrderType::GoodTillCancel, 7},
+    // normally loop till 7, push if cond satisfied (special types)
+    {OrderType::OrderType::MarketOnOpen, 8},
+    {OrderType::OrderType::MarketOnClose, 9}};
+
+std::unordered_map<int, OrderType::OrderType> PreProcessor::m_rankType = {
+    {0, OrderType::OrderType::Market},
+    {1, OrderType::OrderType::FillOrKill},
+    {2, OrderType::OrderType::ImmediateOrCancel},
+    {3, OrderType::OrderType::GoodAfterTime},
+    {4, OrderType::OrderType::GoodForDay},
+    {5, OrderType::OrderType::GoodTillDate},
+    {6, OrderType::OrderType::AllOrNone},
+    {7, OrderType::OrderType::GoodTillCancel},
+    {8, OrderType::OrderType::MarketOnOpen},
+    {9, OrderType::OrderType::MarketOnClose}};
 
 std::string PreProcessor::getType(OrderType::OrderType type) {
   switch (type) {

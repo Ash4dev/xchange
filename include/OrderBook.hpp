@@ -16,23 +16,8 @@ private:
   std::map<Price, LevelPointer, std::greater<Price>> m_bids; // max bid tradable
   std::map<Price, LevelPointer, std::less<Price>> m_asks;    // min ask tradable
 
-  // // direct functions cannot be used as comparators (check this up)
-  // // TODO: not even static functions? find more about this!
-  // struct AdditionDueComparator {
-  //   const OrderBook *orderBook;
-  //   explicit AdditionDueComparator(const OrderBook *ob) : orderBook(ob) {}
-  //   bool operator()(const OrderID &orderID1, const OrderID &orderID2);
-  // };
-  //
-  // struct CancellationDueComparator {
-  //   const OrderBook *orderBook;
-  //   explicit CancellationDueComparator(const OrderBook *ob) : orderBook(ob)
-  //   {} bool operator()(const OrderID &orderID1, const OrderID &orderID2);
-  // };
-  //
-  // // sort orders in addition/cancellation wait queues
-  // std::set<OrderID, OrderBook::AdditionDueComparator> addQueue;
-  // std::set<OrderID, OrderBook::CancellationDueComparator> cancelQueue;
+  // all trades that occur (reset mechanism & backup needed for atleast this)
+  std::vector<Trade> m_trades;
 
 public:
   // various constructors
@@ -74,4 +59,5 @@ public:
   };
 
   Symbol getSymbol() const { return m_symbol; } // symbol getter
+  std::vector<Trade> getTrades() { return m_trades; }
 };

@@ -31,10 +31,3 @@ enum OrderType {
   Market // rest all are limit orders
 };
 }
-
-/*
- * market order
- * match as much qty preferentially as possible
- * what cannot be matched (my > other side total)
- * stays as a good till cancel order for at worst price
- * */
