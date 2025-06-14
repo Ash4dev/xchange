@@ -38,7 +38,8 @@ public:
   // various constructors
   OrderBook() = default;
   OrderBook(Symbol symbol) : m_symbol{symbol} {}
-  OrderBook(OrderBook &ob); // copy constructor
+  // linker error initially since copy constr not implemented before
+  OrderBook(OrderBook &ob) = default; // copy constructor
 
   // made static since stay same across all instances
   static Price decodePriceFromOrderID(const OrderID orderID);

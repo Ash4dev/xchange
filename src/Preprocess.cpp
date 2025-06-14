@@ -1,16 +1,22 @@
 #include "include/Preprocess.hpp"
 #include "include/OrderBook.hpp"
+#include "utils/alias/Fundamental.hpp"
 #include "utils/alias/OrderRel.hpp"
 #include "utils/enums/OrderTypes.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <memory>
 #include <ostream>
 #include <set>
 #include <unordered_map>
+#include <vector>
 
-PreProcessor::PreProcessor(std::string &symbol) : m_symbol(symbol) {
+PreProcessor::PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr,
+                           bool isBidPreprocessor)
+    : m_orderbookPtr(orderbookPtr) {
   int typesz = m_typeRank.size();
+  m_isBidPreprocessor = isBidPreprocessor;
   m_laterProcessOrders.resize(typesz);
   m_lastFlushTime = std::chrono::system_clock::now();
 }
@@ -46,6 +52,7 @@ void PreProcessor::InsertIntoPreprocessing(
   int typeId = m_typeRank[orderactinfo.orderptr->getOrderType()];
   m_laterProcessOrders[typeId].insert(orderactinfo); // add to specific multiset
   seenOrders[orderactinfo.orderptr->getOrderID()] = orderactinfo;
+  PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
 }
 
 void PreProcessor::InsertIntoPreprocessing(const Order &order, bool action) {
@@ -72,6 +79,7 @@ void PreProcessor::RemoveFromPreprocessing(const OrderID &orderId) {
       m_laterProcessOrders[typeId].end()) {
     m_laterProcessOrders[typeId].erase(corrordactinfo);
     seenOrders.erase(orderId); // no more use of storing seen order
+    PreProcessor::TryFlush();  // flush to see if PreProcessor can clean up
     return;
   }
 
@@ -88,31 +96,125 @@ void PreProcessor::ModifyInPreprocessing(const OrderID &oldID,
   InsertIntoPreprocessing(newOrder, true);
 }
 
-void PreProcessor::QueueOrdersIntoWaitQueue() {
-  // TODO: add special condition for MarketOnClose & MarketOnOpen
-  // integeate it QueueOrdersIntoWaitQueue & TryFlush
-  for (const std::multiset<OrderActionInfo> &typeRankedOrders :
-       m_laterProcessOrders) {
-    for (const OrderActionInfo &orderactinfo : typeRankedOrders) {
-      m_waitQueue.push(orderactinfo);
+bool PreProcessor::isHoliday(const TimeStamp &time) {
+  using namespace std::chrono;
+  auto dp = floor<days>(time);
+  year_month_day ymd{dp};
+
+  for (const auto &[d, m, y] : m_holidays) {
+    if (ymd.day() == day{d} && ymd.month() == month{m} &&
+        ymd.year() == year{y}) {
+      return true;
     }
+  }
+  return false;
+}
+
+bool PreProcessor::canTrade() {
+  using namespace std::chrono;
+  auto now = system_clock::now();
+
+  // Check if weekend
+  auto today = floor<days>(now);
+  weekday dow{today};
+  if (dow == Saturday || dow == Sunday) {
+    return false;
+  }
+
+  // Check if holiday
+  if (isHoliday(now)) {
+    return false;
+  }
+
+  // Check market hours (09:15-15:30)
+  auto tod = now - today;
+  auto market_open = hours(9) + minutes(15);
+  auto market_close = hours(15) + minutes(30);
+
+  return tod >= market_open && tod < market_close;
+}
+
+TimeStamp PreProcessor::getNextMarketTime(bool isOpen) {
+  using namespace std::chrono;
+
+  constexpr auto market_open = hours(9) + minutes(15);
+  constexpr auto market_close = hours(15) + minutes(30);
+
+  auto now = system_clock::now();
+  auto today = floor<days>(now);
+  auto target_time = today + (isOpen ? market_open : market_close);
+
+  // Adjust for weekends
+  // auto dow = weekday(target_time); type-casting error
+  auto sys_days = floor<days>(target_time); // First convert to days precision
+  weekday dow{sys_days};                    // Then construct weekday from days
+  if (dow == Saturday)
+    target_time += days(2);
+  else if (dow == Sunday)
+    target_time += days(1);
+
+  // If time already passed today, move to next weekday
+  if (target_time < now) {
+    target_time += days(1);
+    auto sys_days = floor<days>(target_time); // First convert to days precision
+    weekday dow{sys_days}; // Then construct weekday from days
+    if (dow == Saturday)
+      target_time += days(2);
+    else if (dow == Sunday)
+      target_time += days(1);
+  }
+
+  return target_time;
+}
+
+void PreProcessor::QueueOrdersIntoWaitQueue() {
+  auto now = std::chrono::system_clock::now();
+  auto now_min = std::chrono::time_point_cast<std::chrono::minutes>(now);
+
+  // handle MarketOnClose & MarketOnOpen order types first
+  if (now_min == PreProcessor::getNextCloseTime())
+    PreProcessor::EmptyTypeRankedOrders(
+        m_laterProcessOrders[m_typeRank[OrderType::OrderType::MarketOnClose]]);
+  if (now_min == PreProcessor::getNextOpenTime())
+    PreProcessor::EmptyTypeRankedOrders(
+        m_laterProcessOrders[m_typeRank[OrderType::OrderType::MarketOnOpen]]);
+
+  for (std::size_t i = 0; i + 2 < m_laterProcessOrders.size(); i++) {
+    PreProcessor::EmptyTypeRankedOrders(m_laterProcessOrders[i]);
   }
 }
 
-void PreProcessor::EmptyWaitQueue(OrderBook &orderbook) {
-  assert(m_symbol == orderbook.getSymbol()); // ensure symbol same
+void PreProcessor::EmptyTypeRankedOrders(
+    std::multiset<OrderActionInfo> &typeRankedOrders) {
 
+  std::vector<OrderActionInfo> insertedinWaitQueue;
+  for (const OrderActionInfo &orderactinfo : typeRankedOrders) {
+    m_waitQueue.push(orderactinfo);
+    insertedinWaitQueue.push_back(orderactinfo);
+  }
+
+  // clear these orders no longer in preprocessor but in wait queue
+  for (auto &orderactinfo : insertedinWaitQueue) {
+    typeRankedOrders.erase(typeRankedOrders.find(orderactinfo));
+  }
+}
+
+void PreProcessor::EmptyWaitQueue() {
+  if (!PreProcessor::canTrade()) { // can't send into orderbook if market closed
+    // std::cout << "Market Closed :(" << std::endl;
+    return;
+  }
   while (!m_waitQueue.empty()) {
     auto &[topOdrptr, isadd] = m_waitQueue.front();
     m_waitQueue.pop();
     if (isadd)
-      orderbook.AddOrder(*topOdrptr);
+      m_orderbookPtr->AddOrder(*topOdrptr);
     else
-      orderbook.CancelOrder(topOdrptr->getOrderID());
+      m_orderbookPtr->CancelOrder(topOdrptr->getOrderID());
   }
 }
 
-void PreProcessor::TryFlush(OrderBook &orderbook) {
+void PreProcessor::TryFlush() {
   // qty buffered
   std::size_t totalBufferedOrders = 0;
   for (const std::multiset<OrderActionInfo> &typeRankedOrders :
@@ -130,7 +232,7 @@ void PreProcessor::TryFlush(OrderBook &orderbook) {
   if (totalBufferedOrders >= MAX_PENDING_ORDERS_THRESHOLD ||
       durationSinceLastFlush >= MAX_PENDING_DURATION) {
     QueueOrdersIntoWaitQueue();
-    EmptyWaitQueue(orderbook);
+    EmptyWaitQueue();
     m_lastFlushTime = now;
   }
 }
@@ -165,13 +267,17 @@ void PreProcessor::printPreProcessorStatus() {
 
   std::cout << "WAIT QUEUES" << std::endl;
   std::cout << "size: " << m_waitQueue.size() << std::endl;
-  if (m_waitQueue.empty())
-    return;
-  auto [ptr, action] = m_waitQueue.front();
-  std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
-            << " price: " << ptr->getPrice()
-            << " rem qty: " << ptr->getRemainingQuantity() << std::endl;
-  ptr->printTimeInfo();
+
+  // print all the orders left in waitQueue
+  auto copyOfWaitQueue = m_waitQueue;
+  while (!copyOfWaitQueue.empty()) {
+    auto [ptr, action] = copyOfWaitQueue.front();
+    std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
+              << " price: " << ptr->getPrice()
+              << " rem qty: " << ptr->getRemainingQuantity() << std::endl;
+    ptr->printTimeInfo();
+    copyOfWaitQueue.pop();
+  }
 }
 
 std::string PreProcessor::getType(OrderType::OrderType type) {

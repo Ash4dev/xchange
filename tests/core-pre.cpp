@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <ostream>
 
@@ -28,11 +29,14 @@ int main() {
 
   std::string symbol = "A";
 
+  OrderBook orderBook = OrderBook(symbol);
+  std::shared_ptr<OrderBook> orderbookPtr =
+      std::make_shared<OrderBook>(orderBook);
+
   // create separate processor for buy and sell
   // sorting condition different
-  PreProcessor bidpreProcessor = PreProcessor(symbol);
-  PreProcessor askpreProcessor = PreProcessor(symbol);
-  OrderBook orderBook = OrderBook(symbol);
+  PreProcessor bidpreProcessor = PreProcessor(orderbookPtr, true);
+  PreProcessor askpreProcessor = PreProcessor(orderbookPtr, false);
 
   // by mistake bid order inserted in ask PreProcessor (need mechanism)
 
@@ -73,12 +77,12 @@ int main() {
       Order("A", OrderType::OrderType::FillOrKill, Side::Side::Sell, 98.22, 43);
   askpreProcessor.RemoveFromPreprocessing(o5a.getOrderID());
 
-  // no re-deletion of once removed order
   Order o6 = Order("A", OrderType::OrderType::ImmediateOrCancel,
                    Side::Side::Buy, 97.37, 21);
   bidpreProcessor.InsertIntoPreprocessing(o6, true);
-  bidpreProcessor.RemoveFromPreprocessing(o4.getOrderID());
 
+  // no re-deletion of once removed order
+  bidpreProcessor.RemoveFromPreprocessing(o4.getOrderID());
   // modify removes prev & inserts new
   bidpreProcessor.ModifyInPreprocessing(o6.getOrderID(), o4); // modify
 
