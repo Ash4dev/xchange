@@ -24,7 +24,7 @@ public:
     // no point in carrying around whole order
     // pointer to it will be enough
     OrderPointer orderptr;
-    bool action; // 1 -> buy
+    bool action; // 1 -> add into OrderBook
 
     OrderActionInfo(OrderPointer &orderptr, bool action)
         : orderptr{orderptr}, action(action) {};
@@ -53,8 +53,7 @@ public:
   void TryFlush();
 
   // clear these orders from seenOrders once matched to control size
-  // NOTE: should not PreProcessor be free of responsibility once inserted?
-  void ClearSeenOrdersWhenMatched(std::vector<OrderID> &matchedIDs);
+  void ClearSeenOrdersWhenMatched();
 
 private:
   // m_typeRank determines index in vector (uniformity)
@@ -101,7 +100,7 @@ private:
   std::vector<std::multiset<OrderActionInfo>> m_laterProcessOrders;
   std::queue<OrderActionInfo> m_waitQueue;
   std::chrono::system_clock::time_point m_lastFlushTime;
-  std::unordered_map<OrderID, OrderActionInfo> seenOrders; // red-black-tree
+  std::unordered_map<OrderID, OrderActionInfo> m_seenOrders; // red-black-tree
 
   /* synchronous way
    * need bool isInsertOrRemove acts as lock
