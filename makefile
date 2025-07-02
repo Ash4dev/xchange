@@ -3,6 +3,11 @@
 # allows incremental builds
 # main reference: https://makefiletutorial.com/
 
+# TODO: 
+# make prod and dbg CONFIG separate
+# make debug: gdb session & valgrind
+# https://www.youtube.com/watch?v=mfmXcbiRs0E (Jacob Sorber)
+
 # COMPILER CONFIG
 # steps: https://intellipaat.com/blog/wp-content/uploads/2025/03/What-is-Compiling-in-C.jpg
 CXX := g++ # compiler
@@ -67,7 +72,7 @@ redo: all run
 # perform when change in include/src
 fresh: clean redo
 
-
+# ----------------------------------------------------------------------------------------
 # HELPER COMMANDS
 
 # tree:
@@ -86,8 +91,38 @@ project_structure:
 		tree; \
 	fi
 
+testHealth:
+	$(CXX) $(CXXFLAGS) -Itests/ tests/test-check.cpp tests/testHandler.cpp -o tests/testHealth;
+	./tests/testHealth > tests/sample/TestHealth.txt;
+	rm tests/testHealth;
+
+TEST_CPP_DIR := tests
+TEST_CPP_FILES := $(wildcard $(TEST_CPP_DIR)/*.tests.cpp)
+TEST_BIN_DIR := tests/bin
+TEST_BIN_FILES := $(patsubst $(TEST_CPP_DIR)/%.tests.cpp,$(TEST_BIN_DIR)/%,$(TEST_CPP_FILES))
+
+GTEST_FLAGS := -lgtest -lgtest_main -pthread
+$(TEST_BIN_DIR)/%: $(TESTS_DIR)/%.tests.cpp
+	@mkdir -p $(@D);
+	$(CXX) $(CXXFLAGS) $< tests/testHandler.cpp $(GTEST_FLAGS) -o $@
+
+testFiles: $(TEST_BIN_FILES)
+	@for t in $(TEST_BIN_FILES); do \
+		echo "Running $$t"; \
+		./$$t; \
+	done
+
+cleanTests:
+	rm -rf $(TEST_BIN_DIR);
+
 test:
-	@echo "No test framework hooked up yet.";
+	make testHealth;
+	make testFiles;
+
+testAll:
+	make testHealth;
+	make testFiles;
+	make cleanTests;
 
 # Placeholder for release command
 release:

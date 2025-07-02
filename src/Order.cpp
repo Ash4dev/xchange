@@ -11,7 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#define PRICE_MULTIPLIER 100
+const int PRICE_MULTIPLIER = 100;
 
 std::string
 Order::returnReadableTime(const std::chrono::system_clock::time_point &tt) {
@@ -30,13 +30,14 @@ void Order::printTimeInfo() const {
             << std::endl;
 }
 
-Order::Order(const Symbol symbol, OrderType::OrderType orderType,
-             Side::Side side, double price, Quantity quantity,
+Order::Order(const Symbol symbol, const OrderType::OrderType orderType,
+             const Side::Side side, const double price, const Quantity quantity,
+             const ParticipantID &participantID,
              const std::string &activationTime,
              const std::string &deactivationTime)
     : m_symbol{symbol}, m_orderType{orderType}, m_side{side},
       m_price{static_cast<int>(price * PRICE_MULTIPLIER)},
-      m_remQuantity{quantity} {
+      m_remQuantity{quantity}, m_participantID{participantID} {
 
   // static_cast: purely compile time explicit inbuilt/custom cast operator
   // no runtime check -> typecast to parent class, but access child method

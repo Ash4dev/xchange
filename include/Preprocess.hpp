@@ -17,14 +17,15 @@
 
 class PreProcessor {
 public:
-  PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr,
-               bool isBidPreprocessor);
+  PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr, bool isBidPreprocessor,
+               std::size_t pendingOrderThreshold,
+               std::chrono::milliseconds pendingDurationThreshold);
 
   struct OrderActionInfo {
     // no point in carrying around whole order
     // pointer to it will be enough
     OrderPointer orderptr;
-    bool action; // 1 -> add into OrderBook
+    bool action; // 1 -> add into OrderBook (Actions::Actions::Add)
 
     OrderActionInfo(OrderPointer &orderptr, bool action)
         : orderptr{orderptr}, action(action) {};
@@ -37,6 +38,12 @@ public:
       return ((*(this->orderptr)) < (*(other.orderptr)));
     }
   };
+
+  std::size_t getMaxPendingOrdersThreshold() const;
+  void setMaxPendingOrdersThreshold(std::size_t threshold);
+
+  std::chrono::milliseconds getMaxPendingDuration() const;
+  void setMaxPendingDuration(std::chrono::milliseconds duration);
 
   std::string getType(OrderType::OrderType type);
   void printPreProcessorStatus();
@@ -87,9 +94,8 @@ private:
   static TimeStamp getNextCloseTime() { return getNextMarketTime(false); }
 
   // configurable
-  const std::size_t MAX_PENDING_ORDERS_THRESHOLD = 3;
-  const std::chrono::milliseconds MAX_PENDING_DURATION =
-      std::chrono::milliseconds(100000000);
+  std::size_t MAX_PENDING_ORDERS_THRESHOLD;
+  std::chrono::milliseconds MAX_PENDING_DURATION;
 
   // OrderBook as attribute as orderbook is unique for all prepro of same symbol
   // shared_ptr orderbook is shared across all prepro instances (bids, asks)

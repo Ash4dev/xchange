@@ -1,3 +1,5 @@
+#include <chrono>
+#include <cstddef>
 #include <iostream>
 #include <memory>
 #include <ostream>
@@ -18,8 +20,12 @@ int main() {
 
   // create separate processor for buy and sell
   // sorting condition different
-  PreProcessor bidpreProcessor = PreProcessor(orderbookPtr, true);
-  PreProcessor askpreProcessor = PreProcessor(orderbookPtr, false);
+  PreProcessor bidpreProcessor =
+      PreProcessor(orderbookPtr, true, static_cast<std::size_t>(3),
+                   static_cast<std::chrono::milliseconds>(100));
+  PreProcessor askpreProcessor =
+      PreProcessor(orderbookPtr, false, static_cast<std::size_t>(3),
+                   static_cast<std::chrono::milliseconds>(100));
 
   // by mistake bid order inserted in ask PreProcessor (need mechanism)
 

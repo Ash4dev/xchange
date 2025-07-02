@@ -14,12 +14,17 @@
 #include <vector>
 
 PreProcessor::PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr,
-                           bool isBidPreprocessor)
+                           bool isBidPreprocessor,
+                           std::size_t pendingOrdersThreshold,
+                           std::chrono::milliseconds pendingDurationThreshold)
     : m_orderbookPtr(orderbookPtr) {
   int typesz = m_typeRank.size();
   m_isBidPreprocessor = isBidPreprocessor;
   m_laterProcessOrders.resize(typesz);
   m_lastFlushTime = std::chrono::system_clock::now();
+
+  MAX_PENDING_ORDERS_THRESHOLD = pendingOrdersThreshold;
+  MAX_PENDING_DURATION = pendingDurationThreshold;
 }
 
 /*

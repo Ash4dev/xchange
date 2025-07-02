@@ -12,6 +12,7 @@ public:
   Order() = default;
   Order(const Symbol symbol, const OrderType::OrderType orderType,
         const Side::Side side, const double price, const Quantity quantity,
+        const ParticipantID &participantID,
         const std::string &activationTime = "",
         const std::string &deactivationTime = "");
   Order(const Order &other); // copy constructor
@@ -38,6 +39,7 @@ public:
   TimeStamp getOrderTime() const { return m_timestamp; }
   TimeStamp getActivationTime() const { return m_activateTime; }
   TimeStamp getDeactivationTime() const { return m_deactivateTime; }
+  ParticipantID getParticipantID() const { return m_participantID; }
 
   void printTimeInfo() const;
 
@@ -49,6 +51,7 @@ public:
 
 private:
   Symbol m_symbol;
+  ParticipantID m_participantID;
   OrderType::OrderType m_orderType;
   Side::Side m_side;
   Price m_price;
