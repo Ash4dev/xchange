@@ -92,9 +92,10 @@ project_structure:
 	fi
 
 testHealth:
-	$(CXX) $(CXXFLAGS) -Itests/ tests/test-check.cpp tests/testHandler.cpp -o tests/testHealth;
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c -Iutils/ utils/helpers/HelperFunctions.cpp -o tests/helper.o
+	$(CXX) $(CXXFLAGS) -Itests/ tests/test-check.cpp tests/testHandler.cpp tests/helper.o -o tests/testHealth;
 	./tests/testHealth > tests/sample/TestHealth.txt;
-	rm tests/testHealth;
+	rm tests/testHealth tests/helper.o;
 
 TEST_CPP_DIR := tests
 TEST_CPP_FILES := $(wildcard $(TEST_CPP_DIR)/*.tests.cpp)

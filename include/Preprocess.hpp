@@ -1,11 +1,14 @@
 #pragma once
 
-#include "include/Order.hpp"
 #include "include/OrderBook.hpp"
 #include "utils/alias/Fundamental.hpp"
+#include "utils/alias/OrderBookRel.hpp"
 #include "utils/alias/OrderRel.hpp"
+#include "utils/enums/Actions.hpp"
 #include "utils/enums/OrderTypes.hpp"
+#include "utils/enums/Side.hpp"
 
+#include <cassert>
 #include <chrono>
 #include <memory>
 #include <queue>
@@ -13,30 +16,30 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class PreProcessor {
 public:
-  PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr, bool isBidPreprocessor,
+  PreProcessor(OrderBookPointer &orderbookPtr, bool &isBidPreprocessor);
+  PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreprocessor,
                std::size_t pendingOrderThreshold,
                std::chrono::milliseconds pendingDurationThreshold);
 
   struct OrderActionInfo {
-    // no point in carrying around whole order
-    // pointer to it will be enough
-    OrderPointer orderptr;
-    bool action; // 1 -> add into OrderBook (Actions::Actions::Add)
+    OrderID orderID;
+    OrderType::OrderType orderType;
+    Actions::Actions action;
 
-    OrderActionInfo(OrderPointer &orderptr, bool action)
-        : orderptr{orderptr}, action(action) {};
+    OrderActionInfo(const OrderID &orderId, OrderType::OrderType orderType,
+                    Actions::Actions action);
 
-    // if user-provided constructors exist
-    // user must define a default construct explicity
-    // cost me 3 hrs
+    static Side::Side decodeSideFromOrderID(const OrderID orderID);
+    static Price decodePriceFromOrderID(const OrderID orderID);
+
+    // follow rule of 3/5 as per need (context: constructors)
     OrderActionInfo() = default;
-    bool operator<(const OrderActionInfo &other) const {
-      return ((*(this->orderptr)) < (*(other.orderptr)));
-    }
+    bool operator<(const OrderActionInfo &other) const;
   };
 
   std::size_t getMaxPendingOrdersThreshold() const;
@@ -48,12 +51,18 @@ public:
   std::string getType(OrderType::OrderType type);
   void printPreProcessorStatus();
 
+  void InsertAddOrderIntoPreprocessing(const OrderPointer &orderptr);
+  void InsertCancelOrderIntoPreProcessing(const OrderID &orderID,
+                                          const OrderType::OrderType orderType);
   void InsertIntoPreprocessing(const OrderActionInfo &orderactinfo);
-  void InsertIntoPreprocessing(const Order &order, bool action);
-  void RemoveFromPreprocessing(const OrderID &orderId);
-  void ModifyInPreprocessing(const OrderID &oldID, Order &newOrder);
+  void InsertIntoPreprocessing(const OrderPointer &orderptr,
+                               Actions::Actions action);
+  void RemoveFromPreprocessing(const OrderID &orderId,
+                               const OrderType::OrderType &orderType);
+  void ModifyInPreprocessing(const OrderID &oldID,
+                             const OrderPointer &orderptr);
 
-  bool canMatchOrder(const OrderPointer &orderptr);
+  bool canMatchOrder(const OrderID &orderID);
   void EmptyTypeRankedOrders(std::multiset<OrderActionInfo> &typeRankedOrders);
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue();
@@ -106,7 +115,11 @@ private:
   std::vector<std::multiset<OrderActionInfo>> m_laterProcessOrders;
   std::queue<OrderActionInfo> m_waitQueue;
   std::chrono::system_clock::time_point m_lastFlushTime;
-  std::unordered_map<OrderID, OrderActionInfo> m_seenOrders; // red-black-tree
+
+  std::unordered_set<OrderID> m_encounteredOrders;
+  std::unordered_map<OrderID, OrderActionInfo>
+      m_processingOrders; // red-black-tree
+  std::unordered_map<OrderID, OrderPointer> m_orderComposition;
 
   /* synchronous way
    * need bool isInsertOrRemove acts as lock

@@ -1,63 +1,18 @@
 #pragma once
 
-#include "utils/alias/Fundamental.hpp"
+#include "utils/alias/ResultRel.hpp"
 #include "utils/alias/SymbolInfoRel.hpp"
-#include "utils/enums/Actions.hpp"
-#include "utils/enums/OrderTypes.hpp"
-#include "utils/enums/Side.hpp"
+#include "utils/alias/UpdateRel.hpp"
 
 #include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <fstream>
-#include <optional>
 #include <string>
 #include <vector>
 
 struct PreProcessorArguments {
   std::size_t MAX_PENDING_ORDER_THRESHOLD;
   std::chrono::milliseconds MAX_PENDING_DURATION_THRESHOLD;
-};
-
-using UpdateCount = std::uint32_t;
-struct Update {
-  UpdateCount updateCount;
-  Actions::Actions action;
-  // following fields are optional for cancel, modify order
-  std::optional<Symbol> symbol;
-  std::optional<OrderType::OrderType> orderType;
-  std::optional<Side::Side> side;
-  std::optional<Price> price;
-  std::optional<Quantity> quantity;
-  std::optional<TimeStamp> activationTime;
-  std::optional<TimeStamp> deactivationTime;
-  std::optional<ParticipantID> participantID;
-};
-
-struct PreProcessorResult {
-  Symbol symbol;
-  Side::Side side;
-  Actions::Actions action;
-  Price price;
-  Quantity quantity;
-  ParticipantID participantID;
-};
-
-using OrderListSize = std::size_t;
-struct OrderBookResult {
-  Side::Side side;
-  Symbol symbol;
-  Price price;
-  Quantity quantity;
-  OrderListSize orderListSize;
-};
-
-struct TradeResult {
-  Symbol symbol;
-  Price price;
-  Quantity quantity;
-  ParticipantID buyerID;
-  ParticipantID sellerID;
 };
 
 class TestHandler {

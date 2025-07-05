@@ -1,6 +1,7 @@
 #include "tests/testHandler.hpp"
 #include "utils/alias/Fundamental.hpp"
 #include "utils/enums/Side.hpp"
+#include "utils/helpers/HelperFunctions.hpp"
 
 #include <iostream>
 #include <string>

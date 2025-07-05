@@ -1,10 +1,13 @@
 #include "include/Preprocess.hpp"
 #include "include/OrderBook.hpp"
 #include "utils/alias/Fundamental.hpp"
+#include "utils/alias/OrderBookRel.hpp"
 #include "utils/alias/OrderRel.hpp"
+#include "utils/enums/Actions.hpp"
 #include "utils/enums/OrderTypes.hpp"
 #include "utils/enums/Side.hpp"
 
+#include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <memory>
@@ -12,6 +15,65 @@
 #include <set>
 #include <unordered_map>
 #include <vector>
+
+//////////////////////////////////////////
+//////// OrderActionInfo methods ////////
+////////////////////////////////////////
+
+PreProcessor::OrderActionInfo::OrderActionInfo(const OrderID &orderId,
+                                               OrderType::OrderType orderType,
+                                               Actions::Actions action)
+    : orderID{orderId}, orderType{orderType}, action{action} {};
+
+Side::Side
+PreProcessor::OrderActionInfo::decodeSideFromOrderID(const OrderID orderID) {
+  return ((orderID & 0x1)
+              ? Side::Side::Buy
+              : Side::Side::Sell); // side is the last bit of orderID
+}
+
+Price PreProcessor::OrderActionInfo::decodePriceFromOrderID(
+    const OrderID orderID) {
+  auto price = (orderID >> 1) & ((static_cast<OrderID>(1) << 31) - 1);
+  return price;
+}
+
+bool PreProcessor::OrderActionInfo::operator<(
+    const OrderActionInfo &other) const {
+  OrderID thisID = this->orderID;
+  OrderID otherID = other.orderID;
+
+  // | 63-32 (timestamp) | 31-1 (price) | 0 (side) |
+  Side::Side thisSide = decodeSideFromOrderID(thisID);
+  assert(thisSide == decodeSideFromOrderID(otherID));
+
+  Price thisPrice = decodePriceFromOrderID(thisID);
+  Price otherPrice = decodePriceFromOrderID(otherID);
+
+  auto thisTime = (thisID >> 32);
+  auto otherTime = (otherID >> 32);
+
+  if (thisPrice == otherPrice) {
+    return thisTime <= otherTime;
+  }
+
+  if (thisSide == Side::Side::Buy) {
+    return thisPrice > otherPrice;
+  } else {
+    return thisPrice < otherPrice;
+  }
+}
+
+//////////////////////////////////////////
+//////// PreProcessor constructors //////
+////////////////////////////////////////
+
+PreProcessor::PreProcessor(OrderBookPointer &orderbookPtr,
+                           bool &isBidPreprocessor)
+    : m_orderbookPtr{orderbookPtr}, m_isBidPreprocessor{isBidPreprocessor} {
+  MAX_PENDING_ORDERS_THRESHOLD = static_cast<std::size_t>(3);
+  MAX_PENDING_DURATION = static_cast<std::chrono::milliseconds>(100);
+}
 
 PreProcessor::PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr,
                            bool isBidPreprocessor,
@@ -35,62 +97,75 @@ Core functionality: Insert, Remove, Modify in PreProcessing
 
 void PreProcessor::InsertIntoPreprocessing(
     const OrderActionInfo &orderactinfo) {
-  int typeId = m_typeRank[orderactinfo.orderptr->getOrderType()];
+  int typeId = m_typeRank[orderactinfo.orderType];
   m_laterProcessOrders[typeId].insert(orderactinfo); // add to specific multiset
-  m_seenOrders[orderactinfo.orderptr->getOrderID()] = orderactinfo;
+  m_encounteredOrders.insert(orderactinfo.orderID);
+
+  m_processingOrders[orderactinfo.orderID] = orderactinfo;
   PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
 }
 
-void PreProcessor::InsertIntoPreprocessing(const Order &order, bool action) {
-  // orderptr, true: if add order into orderbook
-  // orderptr, false: if remove order from orderbook
-  OrderPointer orderptr = std::make_shared<Order>(order);
-  PreProcessor::OrderActionInfo ordactinfo =
-      PreProcessor::OrderActionInfo(orderptr, action);
+void PreProcessor::InsertAddOrderIntoPreprocessing(
+    const OrderPointer &orderptr) {
+  OrderID currOrderId = orderptr->getOrderID();
+  if (m_orderComposition.count(currOrderId) != 0)
+    return;
 
-  OrderType::OrderType otype = orderptr->getOrderType();
-
-  // need to set deactivate time for GoodForDay orders
-  // others have correctly filled activate & deactivate times
-  if (otype == OrderType::OrderType::GoodForDay) {
+  if (orderptr->getOrderType() == OrderType::OrderType::GoodForDay) {
     if (!PreProcessor::canTrade())
       return; // don't insert if market closed
     orderptr->setDeactivationTime(PreProcessor::getNextCloseTime());
   }
+  m_orderComposition[currOrderId] = orderptr;
 
-  PreProcessor::InsertIntoPreprocessing(ordactinfo);
+  OrderActionInfo orderactinfo = PreProcessor::OrderActionInfo(
+      currOrderId, orderptr->getOrderType(), Actions::Actions::Add);
+  PreProcessor::InsertIntoPreprocessing(orderactinfo);
 }
 
-void PreProcessor::RemoveFromPreprocessing(const OrderID &orderId) {
-  // alt1: encode all info of order class into orderID (less space, poor
-  // scalability) alt2: maintain unordered_map<OrderID, OrderPointer> (more
-  // space, no collision) go with alt2: attribute scalable, lesser debug issues
-  if (m_seenOrders.count(orderId) == 0)
+void PreProcessor::InsertCancelOrderIntoPreProcessing(
+    const OrderID &orderID, const OrderType::OrderType orderType) {
+  OrderActionInfo orderactinfo = PreProcessor::OrderActionInfo(
+      orderID, orderType, Actions::Actions::Cancel);
+  PreProcessor::InsertIntoPreprocessing(orderactinfo);
+}
+
+void PreProcessor::RemoveFromPreprocessing(
+    const OrderID &orderId, const OrderType::OrderType &orderType) {
+
+  // cannot cancel an cancel order (need to replace original order again)
+
+  // never ever seen this order
+  if (m_encounteredOrders.count(orderId) == 0)
     return;
-  OrderActionInfo corrordactinfo = m_seenOrders[orderId];
-  OrderPointer orderptr = corrordactinfo.orderptr;
-  int typeId = m_typeRank[orderptr->getOrderType()];
+
+  if (m_processingOrders.count(orderId) == 0) {
+    // if already into orderbook, preprocess reverse of the original request
+    PreProcessor::InsertCancelOrderIntoPreProcessing(orderId, orderType);
+    return;
+  }
+
+  // order still being processed
+  OrderActionInfo corrordactinfo = m_processingOrders[orderId];
+  int typeId = m_typeRank[orderType];
 
   // if identical order add and cancel?? eliminate on spot
   auto it = m_laterProcessOrders[typeId].find(corrordactinfo);
   if (it != m_laterProcessOrders[typeId].end()) {
     m_laterProcessOrders[typeId].erase(it);
-    m_seenOrders.erase(orderId); // no more use of storing seen order
-    PreProcessor::TryFlush();    // flush to see if PreProcessor can clean up
+    m_processingOrders.erase(orderId); // no more use of storing seen order
+    PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
     return;
   }
-
-  // if already into orderbook, preprocess addition of cancel request
-  corrordactinfo.action = false;
-  m_seenOrders[orderId] = corrordactinfo;
-  PreProcessor::InsertIntoPreprocessing(corrordactinfo);
 }
 
 void PreProcessor::ModifyInPreprocessing(const OrderID &oldID,
-                                         Order &newOrder) {
+                                         const OrderPointer &orderptr) {
   // modify not shown explicitly since linear combination
-  RemoveFromPreprocessing(oldID);
-  InsertIntoPreprocessing(newOrder, true);
+
+  // symbol, orderType cannot be modified
+  RemoveFromPreprocessing(oldID, orderptr->getOrderType());
+  InsertAddOrderIntoPreprocessing(orderptr);
 }
 
 /*
@@ -170,9 +245,10 @@ void PreProcessor::EmptyTypeRankedOrders(
     if (typeRankedOrders.find(orderactinfo) == typeRankedOrders.end())
       continue;
 
-    if (orderactinfo.action &&
-        !PreProcessor::canMatchOrder(orderactinfo.orderptr))
-      continue;
+    if (orderactinfo.action == Actions::Actions::Add) {
+      if (!PreProcessor::canMatchOrder(orderactinfo.orderID))
+        continue;
+    }
     m_waitQueue.push(orderactinfo);
     insertedinWaitQueue.push_back(orderactinfo);
   }
@@ -196,12 +272,13 @@ void PreProcessor::EmptyWaitQueue() {
     return;
   }
   while (!m_waitQueue.empty()) {
-    auto &[topOdrptr, isadd] = m_waitQueue.front();
+    auto &[orderID, _, action] = m_waitQueue.front();
     m_waitQueue.pop();
-    if (isadd)
-      m_orderbookPtr->AddOrder(*topOdrptr);
+    if (action == Actions::Actions::Add &&
+        m_orderComposition.count(orderID) > 0)
+      m_orderbookPtr->AddOrder(*m_orderComposition[orderID]);
     else
-      m_orderbookPtr->CancelOrder(topOdrptr->getOrderID());
+      m_orderbookPtr->CancelOrder(orderID);
   }
   PreProcessor::ClearSeenOrdersWhenMatched();
 }
@@ -216,15 +293,25 @@ void PreProcessor::ClearSeenOrdersWhenMatched() {
     OrderID bidId = trade.getMatchedBid().orderID;
     OrderID askId = trade.getMatchedAsk().orderID;
 
+    // trade cannot happen on the basis of a cancel order hence it must be add
     // stop once an trade has been encountered and cleared previously
-    if ((m_seenOrders.count(bidId) == 0) || (m_seenOrders.count(askId) == 0))
+    if ((m_orderComposition.count(bidId) == 0) ||
+        (m_orderComposition.count(askId) == 0))
       return;
 
-    if (m_seenOrders[bidId].orderptr->getRemainingQuantity() == 0)
-      m_seenOrders.erase(bidId);
+    if (m_orderComposition.count(bidId) > 0 &&
+        m_orderComposition[bidId]->getRemainingQuantity() == 0) {
+      if (m_processingOrders.count(bidId) > 0)
+        m_processingOrders.erase(bidId);
+      m_orderComposition.erase(bidId);
+    }
 
-    if (m_seenOrders[askId].orderptr->getRemainingQuantity() == 0)
-      m_seenOrders.erase(askId);
+    if (m_orderComposition.count(askId) > 0 &&
+        m_orderComposition[askId]->getRemainingQuantity() == 0) {
+      if (m_processingOrders.count(askId) > 0)
+        m_processingOrders.erase(askId);
+      m_orderComposition.erase(askId);
+    }
   }
 }
 
@@ -260,8 +347,11 @@ Quantity qtyAvailableForMatch(const OrderPointer &orderptr,
   return qtyAvailable;
 }
 
-bool PreProcessor::canMatchOrder(const OrderPointer &orderptr) {
+bool PreProcessor::canMatchOrder(const OrderID &orderID) {
   // action is add by default
+  if (m_orderComposition.count(orderID) == 0)
+    return false;
+  const OrderPointer &orderptr = m_orderComposition[orderID];
   OrderType::OrderType otype = orderptr->getOrderType();
 
   // no conditions on these order types
@@ -281,7 +371,8 @@ bool PreProcessor::canMatchOrder(const OrderPointer &orderptr) {
       return true;
 
     // deactivated no more point keeping it
-    PreProcessor::RemoveFromPreprocessing(orderptr->getOrderID());
+    PreProcessor::RemoveFromPreprocessing(orderptr->getOrderID(),
+                                          orderptr->getOrderType());
     return false;
   }
 
@@ -295,7 +386,8 @@ bool PreProcessor::canMatchOrder(const OrderPointer &orderptr) {
 
     // no point in keeping fok order if not executable now
     if (otype == OrderType::OrderType::FillOrKill)
-      PreProcessor::RemoveFromPreprocessing(orderptr->getOrderID());
+      PreProcessor::RemoveFromPreprocessing(orderptr->getOrderID(),
+                                            orderptr->getOrderType());
     return false;
   }
   if (otype == OrderType::OrderType::ImmediateOrCancel) {
@@ -395,12 +487,18 @@ void PreProcessor::printPreProcessorStatus() {
               << std::endl;
     std::cout << "ORDERS: " << std::endl;
     for (auto &info : ms) {
-      OrderPointer ptr = info.orderptr;
-      bool action = info.action;
-      std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
-                << " price: " << ptr->getPrice()
-                << " rem qty: " << ptr->getRemainingQuantity() << std::endl;
-      ptr->printTimeInfo();
+
+      OrderID orderID = info.orderID;
+      Actions::Actions action = info.action;
+      std::cout << "action: "
+                << ((action == Actions::Actions::Add)
+                        ? "ADD"
+                        : ((action == Actions::Actions::Cancel) ? "CANCEL"
+                                                                : "MODIFY"))
+                << " price: "
+                << PreProcessor::OrderActionInfo::decodePriceFromOrderID(
+                       orderID)
+                << std::endl;
     }
   }
 
@@ -410,11 +508,16 @@ void PreProcessor::printPreProcessorStatus() {
   // print all the orders left in waitQueue
   auto copyOfWaitQueue = m_waitQueue;
   while (!copyOfWaitQueue.empty()) {
-    auto [ptr, action] = copyOfWaitQueue.front();
-    std::cout << "action: " << ((action) ? "ADD" : "CANCEL")
-              << " price: " << ptr->getPrice()
-              << " rem qty: " << ptr->getRemainingQuantity() << std::endl;
-    ptr->printTimeInfo();
+    auto [orderID, _, action] = copyOfWaitQueue.front();
+    std::cout << "action: "
+              << ((action == Actions::Actions::Add)
+                      ? "ADD"
+                      : ((action == Actions::Actions::Cancel) ? "CANCEL"
+                                                              : "MODIFY"))
+              << " price: "
+              << PreProcessor::OrderActionInfo::decodePriceFromOrderID(orderID)
+              << std::endl;
+
     copyOfWaitQueue.pop();
   }
 }
