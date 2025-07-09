@@ -69,7 +69,7 @@ bool PreProcessor::OrderActionInfo::operator<(
 ////////////////////////////////////////
 
 PreProcessor::PreProcessor(OrderBookPointer &orderbookPtr,
-                           bool &isBidPreprocessor)
+                           bool isBidPreprocessor)
     : m_orderbookPtr{orderbookPtr}, m_isBidPreprocessor{isBidPreprocessor} {
   MAX_PENDING_ORDERS_THRESHOLD = static_cast<std::size_t>(3);
   MAX_PENDING_DURATION = static_cast<std::chrono::milliseconds>(100);

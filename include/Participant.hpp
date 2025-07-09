@@ -6,7 +6,6 @@
 #include "utils/enums/Actions.hpp"
 #include "utils/enums/OrderTypes.hpp"
 #include "utils/enums/Side.hpp"
-#include "utils/enums/TradeStatus.hpp"
 #include <unordered_map>
 #include <vector>
 
@@ -15,10 +14,12 @@ private:
   struct ParticipantOrderInfo {
     OrderID orderID;
     Actions::Actions action;
-    TradeStatus::TradeStatus tradeStatus;
 
-    ParticipantOrderInfo(const OrderID &orderID, const Actions::Actions &action,
-                         const TradeStatus::TradeStatus &tradeStatus);
+    // rule of 3
+    ParticipantOrderInfo() = default;
+    ParticipantOrderInfo(const OrderID &orderID,
+                         const Actions::Actions &action);
+    ~ParticipantOrderInfo() = default;
   };
 
   ParticipantID m_participantID;
@@ -30,7 +31,6 @@ private:
   std::vector<Trade> m_historyOfTrades;
 
 public:
-  // Constructors
   Participant() = default;
 
   OrderPointer recordNonCancelOrder(const Actions::Actions action,
@@ -42,12 +42,14 @@ public:
                                     const std::string &activationTime = "",
                                     const std::string &deactivationTime = "");
 
-  void updatePortfolio(const std::vector<Trade> &recentTrades);
-  void updateParticipantOrderInfo(const std::vector<Trade> &recentTrades);
+  void recordTrades(const std::vector<Trade> &recentTrades);
+  void updatePortfolio(const Side::Side &side, const Trade &trade);
+  void updateOrderStatus(const OrderID &matchedID);
 
-  void setParticipantID(ParticipantID &newId);
   ParticipantID getParticipantID();
   Portfolio getPortfolio();
-  std::vector<ParticipantOrderInfo> getPlacedOrders();
+  ParticipantOrderInfo getOrderInformation(OrderID &orderID);
   std::vector<Trade> getHistoryOfTrades();
+
+  void setParticipantID(const ParticipantID &newID);
 };

@@ -95,17 +95,20 @@ testHealth:
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c -Iutils/ utils/helpers/HelperFunctions.cpp -o tests/helper.o
 	$(CXX) $(CXXFLAGS) -Itests/ tests/test-check.cpp tests/testHandler.cpp tests/helper.o -o tests/testHealth;
 	./tests/testHealth > tests/sample/TestHealth.txt;
-	rm tests/testHealth tests/helper.o;
+	@rm tests/testHealth;
 
 TEST_CPP_DIR := tests
 TEST_CPP_FILES := $(wildcard $(TEST_CPP_DIR)/*.tests.cpp)
 TEST_BIN_DIR := tests/bin
 TEST_BIN_FILES := $(patsubst $(TEST_CPP_DIR)/%.tests.cpp,$(TEST_BIN_DIR)/%,$(TEST_CPP_FILES))
 
+getObjectFiles: $(OBJ_FILES)
+
 GTEST_FLAGS := -lgtest -lgtest_main -pthread
-$(TEST_BIN_DIR)/%: $(TESTS_DIR)/%.tests.cpp
+$(TEST_BIN_DIR)/%: $(TESTS_DIR)/%.tests.cpp $(OBJ_FILES)
 	@mkdir -p $(@D);
-	$(CXX) $(CXXFLAGS) $< tests/testHandler.cpp $(GTEST_FLAGS) -o $@
+	$(CXX) $(CXXFLAGS) $< tests/testHandler.cpp $(GTEST_FLAGS) tests/helper.o $(OBJ_FILES) -o $@
+
 
 testFiles: $(TEST_BIN_FILES)
 	@for t in $(TEST_BIN_FILES); do \
@@ -114,7 +117,8 @@ testFiles: $(TEST_BIN_FILES)
 	done
 
 cleanTests:
-	rm -rf $(TEST_BIN_DIR);
+	rm -rf $(TEST_BIN_DIR) $(OBJ_DIR);
+	rm tests/helper.o;
 
 test:
 	make testHealth;

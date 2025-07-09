@@ -1,5 +1,6 @@
 #include "include/Level.hpp"
 #include "utils/alias/Fundamental.hpp"
+#include "utils/enums/OrderStatus.hpp"
 
 #include <iterator>
 #include <unordered_map>
@@ -27,6 +28,11 @@ void Level::AddOrder(Order &order) {
   // uses copy constructor over provided constructor to create pointer to
   // resource
   OrderPointer currentOrderPointer = std::make_shared<Order>(order);
+
+  // add order has now entered the orderbook's specific level, once executed
+  // it's status will be updated to processed
+  currentOrderPointer->setOrderStatus(OrderStatus::OrderStatus::Processing);
+
   m_orderList.push_back(currentOrderPointer); // pass by value (copy created)
   // verify copy creation using currentOrderPointer.use_count(): ref incr by 1
 
@@ -41,6 +47,8 @@ void Level::AddOrder(Order &order) {
 void Level::CancelOrder(OrderID orderID) {
   // cannot delete non-existing order in a level
   if (m_info.count(orderID) == 0) {
+    // in case order is not found, then the cancel order remains NotProcessed
+    // (no hope for it)
     return;
   }
   // obtain to be deleted order information
@@ -49,6 +57,10 @@ void Level::CancelOrder(OrderID orderID) {
   // debugging: before & after: m_quantity, ol size, info size
   m_quantity -=
       corrOrderPointer->getRemainingQuantity(); // subtract qty from level
+
+  // cancel order that is cancelled has served its purpose (hence it is
+  // processed not processing)
+  corrOrderPointer->setOrderStatus(OrderStatus::OrderStatus::Cancelled);
 
   m_orderList.erase(corrOrderListIterator); // remove from list of orders
   m_info.erase(orderID);                    // remove information of old order

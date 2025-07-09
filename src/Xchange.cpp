@@ -1,5 +1,5 @@
 #include "include/Xchange.hpp"
-#include "SymbolInfo.hpp"
+#include "include/SymbolInfo.hpp"
 #include "utils/alias/Fundamental.hpp"
 #include "utils/alias/OrderRel.hpp"
 #include "utils/alias/ParticipantRel.hpp"
@@ -20,22 +20,30 @@
 ////// Constructors of Xchange //////
 ////////////////////////////////////
 
+std::unique_ptr<Xchange> Xchange::m_instance = nullptr;
+
 Xchange::Xchange(std::size_t pendingThreshold,
                  std::chrono::milliseconds pendingDuration)
     : MAX_PENDING_ORDERS_THRESHOLD{pendingThreshold},
-      MAX_PENDING_DURATION{pendingDuration} {};
+      MAX_PENDING_DURATION{pendingDuration} {
+  std::cout << "Xchange object initialized!" << std::endl;
+};
 
-Xchange &Xchange::getInstance(std::size_t pendingThreshold,
-                              std::chrono::milliseconds pendingDuration) {
+Xchange &Xchange::getInstance(int pendingThreshold, int pendingDuration) {
   if (!m_instance) {
-    m_instance.reset(new Xchange(pendingThreshold, pendingDuration));
+    m_instance.reset(
+        new Xchange(static_cast<std::size_t>(pendingThreshold),
+                    static_cast<std::chrono::milliseconds>(pendingDuration)));
   }
   return *m_instance;
 }
 
 // no need to use static here
 // since static here would indicate internal linkage and not it belongs to class
-void Xchange::destroyInstance() { m_instance.reset(nullptr); }
+void Xchange::destroyInstance() {
+  m_instance.reset(nullptr);
+  std::cout << "Xchange object destroyed!" << std::endl;
+}
 
 //////////////////////////////////////
 ///////// PARTICIPANT FUNCTIONALITY /

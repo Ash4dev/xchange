@@ -1,6 +1,7 @@
 #include "include/Order.hpp"
 #include "utils/Constants.hpp"
 #include "utils/alias/Fundamental.hpp"
+#include "utils/enums/OrderStatus.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -43,6 +44,7 @@ Order::Order(const Symbol symbol, const OrderType::OrderType orderType,
   // no runtime check -> typecast to parent class, but access child method
   // above problematic -> solution: dynamic_cast
   // keep sure all values are in int to avoid round off, precision errors etc
+  m_orderStatus = OrderStatus::OrderStatus::NotProcessed;
   m_timestamp = std::chrono::system_clock::now(); // time_point
   m_orderID =
       Order::encodeOrderID(m_timestamp, m_price, m_side == Side::Side::Buy);
@@ -103,7 +105,8 @@ Order::Order(const Order &other)
       m_side{other.getSide()}, m_price{other.getPrice()},
       m_remQuantity{other.getRemainingQuantity()},
       m_orderID{other.getOrderID()}, m_activateTime{other.getActivationTime()},
-      m_deactivateTime{other.getDeactivationTime()} {}
+      m_deactivateTime{other.getDeactivationTime()},
+      m_orderStatus{other.getOrderStatus()} {}
 
 OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid) {
 

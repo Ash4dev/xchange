@@ -21,7 +21,7 @@
 
 class PreProcessor {
 public:
-  PreProcessor(OrderBookPointer &orderbookPtr, bool &isBidPreprocessor);
+  PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreprocessor);
   PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreprocessor,
                std::size_t pendingOrderThreshold,
                std::chrono::milliseconds pendingDurationThreshold);
@@ -110,8 +110,8 @@ private:
   // shared_ptr orderbook is shared across all prepro instances (bids, asks)
   // OrderBook ptr removed once all preprocessors removed
   // independence across symbols will also be maintained
-  bool m_isBidPreprocessor;
   std::shared_ptr<OrderBook> m_orderbookPtr;
+  bool m_isBidPreprocessor;
   std::vector<std::multiset<OrderActionInfo>> m_laterProcessOrders;
   std::queue<OrderActionInfo> m_waitQueue;
   std::chrono::system_clock::time_point m_lastFlushTime;

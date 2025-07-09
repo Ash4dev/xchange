@@ -29,9 +29,9 @@ private:
   std::size_t MAX_PENDING_ORDERS_THRESHOLD;
   std::chrono::milliseconds MAX_PENDING_DURATION;
 
-  // private instance & constructor
   static std::unique_ptr<Xchange>
       m_instance; // must initialize outside class in main
+  // private constructor
   Xchange(std::size_t pendingThreshold,
           std::chrono::milliseconds pendingDuration);
 
@@ -39,8 +39,7 @@ public:
   Xchange(const Xchange &) = delete;            // copy-constructor
   Xchange &operator=(const Xchange &) = delete; // copy-assignment
 
-  static Xchange &getInstance(std::size_t pendingThreshold,
-                              std::chrono::milliseconds pendingDuration);
+  static Xchange &getInstance(int pendingThreshold, int pendingDuration);
   static void destroyInstance();
 
   void addParticipant(const std::string &govId);

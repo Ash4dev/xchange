@@ -14,6 +14,7 @@ public:
   }
 
   // https://stackoverflow.com/a/16449914
+  const Symbol getSymbol() const { return m_symbol; }
   const OrderTraded &getMatchedBid() const { return m_bidMatch; }
   const OrderTraded &getMatchedAsk() const { return m_askMatch; }
   const TimeStamp getMatchTime() const { return m_timeMatch; }
@@ -27,6 +28,7 @@ public:
   }
 
 private:
+  Symbol m_symbol;
   OrderTraded m_bidMatch;
   OrderTraded m_askMatch;
   TimeStamp m_timeMatch;
