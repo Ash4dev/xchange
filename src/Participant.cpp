@@ -6,8 +6,11 @@
 #include "utils/enums/OrderStatus.hpp"
 #include "utils/enums/Side.hpp"
 #include <cassert>
+#include <cstddef>
 #include <include/Participant.hpp>
 #include <vector>
+
+std::size_t Participant::lastProcessedTradeIndex = 0;
 
 Participant::ParticipantOrderInfo::ParticipantOrderInfo(
     const OrderID &orderID, const Actions::Actions &action,
@@ -15,6 +18,13 @@ Participant::ParticipantOrderInfo::ParticipantOrderInfo(
     const Side::Side &side)
     : orderID{orderID}, action{action}, symbol{symbol}, otype{otype},
       side{side} {}
+
+void Participant::recordCancelOrder(const OrderID &orderID) {
+  if (!isParticularOrderPlacedByParticipant(orderID))
+    return;
+  m_placedOrders.erase(orderID);
+  m_orderComposition.erase(orderID);
+}
 
 OrderPointer Participant::recordNonCancelOrder(
     const Actions::Actions action, const Symbol &symbol,
@@ -40,17 +50,22 @@ OrderPointer Participant::recordNonCancelOrder(
   return orderptr;
 }
 
-void Participant::recordTrades(const std::vector<Trade> &recentTrades) {
-  for (auto &trade : recentTrades) {
+void Participant::recordTrades(const std::vector<Trade> &trades) {
+
+  std::size_t validTrades = 0;
+  for (std::size_t idx = Participant::lastProcessedTradeIndex;
+       idx < trades.size(); idx++) {
+    Trade trade = trades[idx];
     ParticipantID buyPartID = trade.getMatchedBid().participantID;
     ParticipantID sellPartID = trade.getMatchedAsk().participantID;
 
     if (buyPartID == m_participantID && sellPartID == m_participantID)
-      return;
+      continue;
 
     if (buyPartID != m_participantID && sellPartID != m_participantID)
-      return;
+      continue;
 
+    validTrades++;
     m_historyOfTrades.push_back(trade);
 
     OrderID buyOrderID = trade.getMatchedBid().orderID;
@@ -61,10 +76,11 @@ void Participant::recordTrades(const std::vector<Trade> &recentTrades) {
         ((matchedID == buyOrderID) ? Side::Side::Buy : Side::Side::Sell);
 
     if (m_orderComposition.count(matchedID) == 0)
-      return;
+      continue;
     Participant::updateOrderStatus(matchedID);
     Participant::updatePortfolio(side, trade);
   }
+  Participant::lastProcessedTradeIndex += validTrades;
 }
 
 void Participant::updateOrderStatus(const OrderID &matchedID) {
@@ -87,9 +103,28 @@ void Participant::updatePortfolio(const Side::Side &side, const Trade &trade) {
 ParticipantID Participant::getParticipantID() const { return m_participantID; }
 Portfolio Participant::getPortfolio() const { return m_portfolio; }
 
+double Participant::getValuationOfSymbol(const Symbol &symbol) const {
+  if (!m_portfolio.contains(symbol))
+    return static_cast<double>(0);
+  return static_cast<double>(m_portfolio.at(symbol));
+}
+
+double Participant::getValuationOfPortfolio() const {
+  Amount amt = 0;
+  for (auto [symbol, symbolVal] : m_portfolio)
+    amt += symbolVal;
+  return static_cast<double>(amt);
+}
+
 Participant::ParticipantOrderInfo
 Participant::getOrderInformation(const OrderID &orderID) const {
   return m_placedOrders.at(orderID);
+}
+
+bool Participant::isParticularOrderPlacedByParticipant(
+    const OrderID &orderID) const {
+  return (m_placedOrders.contains(orderID) &&
+          m_orderComposition.contains(orderID));
 }
 
 OrderPointer Participant::getOrder(const OrderID &orderId) const {
@@ -115,4 +150,8 @@ std::size_t Participant::getNumberOfTrades() const {
 
 void Participant::setParticipantID(const ParticipantID &newID) {
   m_participantID = newID;
+}
+
+bool Participant::isSymbolInPortfolio(const std::string &symbol) const {
+  return (m_portfolio.contains(symbol));
 }

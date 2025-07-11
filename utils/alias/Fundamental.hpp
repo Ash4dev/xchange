@@ -16,5 +16,5 @@ using OrderID = std::uint64_t;
 
 using ParticipantID = std::string;
 // net position can also be effectively negative (loss)
-using Amount = std::int64_t;
+using Amount = double;
 using Portfolio = std::unordered_map<Symbol, Amount>;

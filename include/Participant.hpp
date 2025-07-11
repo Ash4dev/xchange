@@ -48,6 +48,8 @@ public:
                                     const std::string &activationTime = "",
                                     const std::string &deactivationTime = "");
 
+  void recordCancelOrder(const OrderID &orderID);
+
   void recordTrades(const std::vector<Trade> &recentTrades);
   void updatePortfolio(const Side::Side &side, const Trade &trade);
   void updateOrderStatus(const OrderID &matchedID);
@@ -58,7 +60,8 @@ public:
   Portfolio getPortfolio() const;
   std::size_t getNumberOfAssetsInPortfolio() const;
   bool isSymbolInPortfolio(const std::string &symbol) const;
-  Amount getValuationOfPortfolio() const;
+  double getValuationOfSymbol(const Symbol &symbol) const;
+  double getValuationOfPortfolio() const;
 
   bool isParticularOrderPlacedByParticipant(const OrderID &orderID) const;
   ParticipantOrderInfo getOrderInformation(const OrderID &orderID) const;
@@ -69,6 +72,7 @@ public:
   std::size_t getNumberOfCancelledOrders() const;
   std::size_t getNumberOfProcessedOrders() const;
 
+  static std::size_t lastProcessedTradeIndex;
   std::size_t getNumberOfTrades() const;
   std::vector<Trade> getHistoryOfTrades() const;
 

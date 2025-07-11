@@ -27,9 +27,7 @@ std::unique_ptr<Xchange> Xchange::m_instance = nullptr;
 Xchange::Xchange(std::size_t pendingThreshold,
                  std::chrono::milliseconds pendingDuration)
     : MAX_PENDING_ORDERS_THRESHOLD{pendingThreshold},
-      MAX_PENDING_DURATION{pendingDuration} {
-  std::cout << "Xchange object initialized!" << std::endl;
-};
+      MAX_PENDING_DURATION{pendingDuration} {};
 
 Xchange &Xchange::getInstance(int pendingThreshold, int pendingDuration) {
   if (!m_instance) {
@@ -42,10 +40,7 @@ Xchange &Xchange::getInstance(int pendingThreshold, int pendingDuration) {
 
 // no need to use static here
 // since static here would indicate internal linkage and not it belongs to class
-void Xchange::destroyInstance() {
-  m_instance.reset(nullptr);
-  std::cout << "Xchange object destroyed!" << std::endl;
-}
+void Xchange::destroyInstance() { m_instance.reset(nullptr); }
 
 //////////////////////////////////////
 ///////// PARTICIPANT FUNCTIONALITY /
@@ -104,71 +99,70 @@ std::optional<OrderID> Xchange::placeOrder(
     const std::optional<std::string> &activationTime,
     const std::optional<std::string> &deactivationTime) {
 
-  // Participant does not exist
   if (m_participants.count(participantID) == 0)
-    return std::nullopt;
+    return std::nullopt; // participant must exist
 
-  // must be present in all orders (cancel, modify)
-  // cannot modify symbol, orderType, side (if needed explicit cancel and add
-  // done)
-  if (!symbol.has_value() || !orderType.has_value())
-    return std::nullopt;
+  if (!symbol.has_value() || !orderType.has_value() || !side.has_value())
+    return std::nullopt; // presence must (not modifiable: explicit c+a)
 
   OrderPointer orderptr{nullptr};
   bool canNOTplaceOrder =
-      (!side.has_value() || !price.has_value() || !quantity.has_value() ||
+      (!price.has_value() || !quantity.has_value() ||
        !activationTime.has_value() || !deactivationTime.has_value());
 
+  // create the new order that will be created in this call
   if (!canNOTplaceOrder) {
     orderptr = m_participants[participantID]->recordNonCancelOrder(
         action, symbol.value(), orderType.value(), side.value(), price.value(),
         quantity.value(), participantID, activationTime.value(),
         deactivationTime.value());
   }
-  SymbolInfoPointer symbolInfoPointer = m_symbolInfos[symbol.value()];
 
+  if (action != Actions::Actions::Add && !oldOrderID.has_value())
+    return std::nullopt; // cancel/modify must have oldOrderID for deletion
+
+  SymbolInfoPointer symbolInfoPointer = m_symbolInfos.at(symbol.value());
   if (symbolInfoPointer == nullptr) {
     return std::nullopt;
   }
-  if (action == Actions::Actions::Cancel ||
-      action == Actions::Actions::Modify) {
-    if (!oldOrderID.has_value())
-      return std::nullopt;
 
-    Side::Side decipheredSide =
-        ((oldOrderID.value() & 0x1) ? (Side::Side::Buy) : (Side::Side::Sell));
-    PreProcessorPointer prePtr =
-        ((decipheredSide == Side::Side::Buy) ? symbolInfoPointer->m_bidprepro
-                                             : symbolInfoPointer->m_askprepro);
-
-    if (action == Actions::Actions::Modify && orderptr != nullptr) {
-      auto const oldOrderInfo = m_participants.at(participantID)
-                                    ->getOrderInformation(oldOrderID.value());
-      std::cout << oldOrderInfo.symbol << std::endl;
-      if (oldOrderInfo.side != side || oldOrderInfo.otype != orderType ||
-          oldOrderInfo.symbol != symbol) {
-        throw std::logic_error("can NOT alter side, ordertype, symbol while "
-                               "modifying a previous order");
-        return std::nullopt;
-      }
-      prePtr->ModifyInPreprocessing(oldOrderID.value(), orderptr);
-      return orderptr->getOrderID();
-    } else {
-      prePtr->RemoveFromPreprocessing(oldOrderID.value(), orderType.value());
-      return std::nullopt;
-    }
-  }
-
-  if (orderptr == nullptr)
-    return std::nullopt;
-
-  PreProcessorPointer prePtr = (side.value() == Side::Side::Buy)
-                                   ? symbolInfoPointer->m_bidprepro
-                                   : symbolInfoPointer->m_askprepro;
+  PreProcessorPointer prePtr =
+      ((side == Side::Side::Buy) ? symbolInfoPointer->m_bidprepro
+                                 : symbolInfoPointer->m_askprepro);
   if (prePtr == nullptr)
     return std::nullopt;
 
-  prePtr->InsertAddOrderIntoPreprocessing(orderptr);
+  if (action == Actions::Actions::Cancel) {
+    bool hasEntered = (prePtr->hasOrderEnteredOrderbook(oldOrderID.value(),
+                                                        orderType.value()));
+    if (!hasEntered)
+      getParticipantInfo(participantID)->recordCancelOrder(oldOrderID.value());
+    prePtr->RemoveFromPreprocessing(oldOrderID.value(), orderType.value());
+    return std::nullopt;
+  }
+
+  // Add/Modify actions only possible
+  if (orderptr == nullptr)
+    return std::nullopt;
+
+  if (action == Actions::Actions::Add) {
+    prePtr->InsertAddOrderIntoPreprocessing(orderptr);
+    return orderptr->getOrderID();
+  }
+
+  auto const oldOrderInfo =
+      m_participants.at(participantID)->getOrderInformation(oldOrderID.value());
+  if (oldOrderInfo.side != side || oldOrderInfo.otype != orderType ||
+      oldOrderInfo.symbol != symbol) {
+    throw std::logic_error("can NOT alter side, ordertype, symbol while "
+                           "modifying a previous order");
+    return std::nullopt;
+  }
+  bool hasEntered =
+      (prePtr->hasOrderEnteredOrderbook(oldOrderID.value(), orderType.value()));
+  if (!hasEntered)
+    getParticipantInfo(participantID)->recordCancelOrder(oldOrderID.value());
+  prePtr->ModifyInPreprocessing(oldOrderID.value(), orderptr);
   return orderptr->getOrderID();
 }
 

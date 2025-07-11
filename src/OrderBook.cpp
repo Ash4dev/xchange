@@ -184,11 +184,11 @@ std::optional<Trade> OrderBook::MatchPotentialOrders() {
 
   // store trade information
   OrderTraded bidTrade =
-      OrderTraded(bestBidOrder->getOrderID(), settlementPrice, filledQuantity,
-                  bestBidOrder->getParticipantID());
+      OrderTraded(m_symbol, bestBidOrder->getOrderID(), settlementPrice,
+                  filledQuantity, bestBidOrder->getParticipantID());
   OrderTraded askTrade =
-      OrderTraded(bestAskOrder->getOrderID(), settlementPrice, filledQuantity,
-                  bestAskOrder->getParticipantID());
+      OrderTraded(m_symbol, bestAskOrder->getOrderID(), settlementPrice,
+                  filledQuantity, bestAskOrder->getParticipantID());
 
   Trade trade = Trade{bidTrade, askTrade};
   m_trades.push_back(trade); // store trades

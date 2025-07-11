@@ -137,14 +137,8 @@ void PreProcessor::InsertCancelOrderIntoPreProcessing(
   PreProcessor::InsertIntoPreprocessing(orderactinfo);
 }
 
-// cannot cancel an cancel order (need to replace original order again)
-void PreProcessor::RemoveFromPreprocessing(
+bool PreProcessor::hasOrderEnteredOrderbook(
     const OrderID &orderId, const OrderType::OrderType &orderType) {
-
-  // never ever seen this order
-  if (m_encounteredOrders.count(orderId) == 0)
-    return;
-
   int typeId = m_typeRank.at(orderType);
   std::optional<OrderActionInfo> corrordactinfo = std::nullopt;
   if (m_processingOrderActInfo.count(orderId) > 0)
@@ -161,8 +155,18 @@ void PreProcessor::RemoveFromPreprocessing(
       it == m_laterProcessOrders.at(typeId).end()) {
     intoOrderBookAlready = false;
   }
+  return intoOrderBookAlready;
+}
 
-  if (intoOrderBookAlready) {
+// cannot cancel an cancel order (need to replace original order again)
+void PreProcessor::RemoveFromPreprocessing(
+    const OrderID &orderId, const OrderType::OrderType &orderType) {
+
+  // never ever seen this order
+  if (m_encounteredOrders.count(orderId) == 0)
+    return;
+
+  if (hasOrderEnteredOrderbook(orderId, orderType)) {
     // if already into orderbook, preprocess reverse of the original request
     PreProcessor::InsertCancelOrderIntoPreProcessing(orderId, orderType);
     PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
@@ -174,49 +178,15 @@ void PreProcessor::RemoveFromPreprocessing(
     m_processingOrderActInfo.erase(orderId); // orderactinfo
   if (m_orderComposition.count(orderId) > 0)
     m_orderComposition.erase(orderId); // orderptr
+
+  int typeId = m_typeRank.at(orderType);
+  std::multiset<OrderActionInfo>::iterator it =
+      m_laterProcessOrders.at(typeId).end();
   if (it != m_laterProcessOrders.at(typeId).end())
     m_laterProcessOrders.at(typeId).erase(it); // just before exit
 
   PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
 }
-
-//
-// void PreProcessor::RemoveFromPreprocessing(
-//     const OrderID &orderId, const OrderType::OrderType &orderType) {
-//   // cannot cancel an cancel order (need to replace original order again)
-//
-//   // never ever seen this order
-//   if (m_encounteredOrders.count(orderId) == 0)
-//     return;
-//
-//
-//   if (m_orderComposition.count(orderId) == 0 ||
-//       m_processingOrderActInfo.count(orderId) == 0) {
-//     if (m_processingOrderActInfo.count(orderId) > 0)
-//       m_processingOrderActInfo.erase(orderId); // orderactinfo
-//     if (m_orderComposition.count(orderId) > 0)
-//       m_orderComposition.erase(orderId); // orderptr
-//     // if already into orderbook, preprocess reverse of the original request
-//     PreProcessor::InsertCancelOrderIntoPreProcessing(orderId, orderType);
-//     return;
-//   }
-//
-//   // order still being processed
-//   OrderActionInfo corrordactinfo = m_processingOrderActInfo[orderId];
-//   int typeId = m_typeRank[orderType];
-//
-//   // no more use of storing deleted information for an order
-//   m_processingOrderActInfo.erase(orderId); // orderactinfo
-//   m_orderComposition.erase(orderId);       // orderptr
-//
-//   // if identical order add and cancel?? eliminate on spot
-//   auto it = m_laterProcessOrders[typeId].find(corrordactinfo);
-//   if (it != m_laterProcessOrders[typeId].end()) {
-//     m_laterProcessOrders[typeId].erase(it);
-//   }
-//   PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
-//   return;
-// }
 
 void PreProcessor::ModifyInPreprocessing(const OrderID &oldID,
                                          const OrderPointer &orderptr) {

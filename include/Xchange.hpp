@@ -70,6 +70,7 @@ public:
   OrderBookPointer getOrderBook(const Symbol &symbol) const;
   PreProcessorPointer getPreProcessor(const Symbol &symbol,
                                       const Side::Side &side) const;
+  std::vector<Trade> getTradesExecuted(const Symbol &symbol) const;
 
   std::size_t getOrderThreshold() const;
   std::uint64_t getDurationThreshold() const;

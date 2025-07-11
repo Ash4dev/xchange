@@ -148,7 +148,7 @@ TEST(Xchange, PlaceCancelOrder) {
       "01-01-2100 00:00:00");
 
   xchange.placeOrder(partId1, Actions::Actions::Cancel, orderId1.value(),
-                     symbol1, std::nullopt, OrderType::OrderType::Market,
+                     symbol1, Side::Side::Buy, OrderType::OrderType::Market,
                      std::nullopt, std::nullopt, std::nullopt, std::nullopt);
 
   verifyCancelOrderInformation(

@@ -58,6 +58,10 @@ public:
   void InsertIntoPreprocessing(const OrderActionInfo &orderactinfo);
   void InsertIntoPreprocessing(const OrderPointer &orderptr,
                                Actions::Actions action);
+
+  bool hasOrderEnteredOrderbook(const OrderID &orderID,
+                                const OrderType::OrderType &otype);
+
   void RemoveFromPreprocessing(const OrderID &orderId,
                                const OrderType::OrderType &orderType);
   void ModifyInPreprocessing(const OrderID &oldID,

@@ -2,14 +2,17 @@
 
 #include "include/OrderTraded.hpp"
 #include "utils/alias/Fundamental.hpp"
+#include <cassert>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 
 class Trade {
 public:
-  Trade(OrderTraded &bidOrder, OrderTraded &askOrder)
+  Trade(const OrderTraded &bidOrder, const OrderTraded &askOrder)
       : m_bidMatch{bidOrder}, m_askMatch{askOrder} {
+    assert(bidOrder.getSymbol() == askOrder.getSymbol());
+    m_symbol = bidOrder.getSymbol();
     m_timeMatch = std::chrono::system_clock::now();
   }
 
