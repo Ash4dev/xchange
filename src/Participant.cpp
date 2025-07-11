@@ -10,10 +10,11 @@
 #include <vector>
 
 Participant::ParticipantOrderInfo::ParticipantOrderInfo(
-    const OrderID &orderID, const Actions::Actions &action)
-    : orderID{orderID}, action{action} {
-  ;
-}
+    const OrderID &orderID, const Actions::Actions &action,
+    const Symbol &symbol, const OrderType::OrderType &otype,
+    const Side::Side &side)
+    : orderID{orderID}, action{action}, symbol{symbol}, otype{otype},
+      side{side} {}
 
 OrderPointer Participant::recordNonCancelOrder(
     const Actions::Actions action, const Symbol &symbol,
@@ -31,7 +32,8 @@ OrderPointer Participant::recordNonCancelOrder(
       std::make_shared<Order>(symbol, orderType, side, price, quantity,
                               participantID, activationTime, deactivationTime);
   OrderID orderID = orderptr->getOrderID();
-  ParticipantOrderInfo partorderinfo = ParticipantOrderInfo(orderID, action);
+  ParticipantOrderInfo partorderinfo =
+      ParticipantOrderInfo(orderID, action, symbol, orderType, side);
   m_placedOrders[orderID] = (partorderinfo);
 
   m_orderComposition[orderID] = orderptr;
@@ -82,14 +84,33 @@ void Participant::updatePortfolio(const Side::Side &side, const Trade &trade) {
   m_portfolio[trade.getSymbol()] = updated;
 }
 
-ParticipantID Participant::getParticipantID() { return m_participantID; }
-Portfolio Participant::getPortfolio() { return m_portfolio; }
+ParticipantID Participant::getParticipantID() const { return m_participantID; }
+Portfolio Participant::getPortfolio() const { return m_portfolio; }
+
 Participant::ParticipantOrderInfo
-Participant::getOrderInformation(OrderID &orderID) {
-  return m_placedOrders[orderID];
+Participant::getOrderInformation(const OrderID &orderID) const {
+  return m_placedOrders.at(orderID);
 }
-std::vector<Trade> Participant::getHistoryOfTrades() {
+
+OrderPointer Participant::getOrder(const OrderID &orderId) const {
+  if (!m_orderComposition.contains(orderId))
+    return nullptr;
+  return m_orderComposition.at(orderId);
+}
+std::vector<Trade> Participant::getHistoryOfTrades() const {
   return m_historyOfTrades;
+}
+
+std::size_t Participant::getNumberOfAssetsInPortfolio() const {
+  return m_portfolio.size();
+}
+
+std::size_t Participant::getNumberOfOrdersPlaced() const {
+  return m_placedOrders.size();
+}
+
+std::size_t Participant::getNumberOfTrades() const {
+  return m_historyOfTrades.size();
 }
 
 void Participant::setParticipantID(const ParticipantID &newID) {

@@ -11,6 +11,7 @@
 #include <cassert>
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <set>
 #include <string>
@@ -67,9 +68,13 @@ public:
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue();
   void TryFlush();
-
   // clear these orders from seenOrders once matched to control size
   void ClearSeenOrdersWhenMatched();
+
+  std::size_t NumberOfOrdersBeingProcessed(const OrderType::OrderType &otype);
+  bool hasOrderBeenEncountered(const OrderID &orderID);
+  std::optional<OrderActionInfo> getOrderInfo(const OrderID &orderID);
+  OrderPointer getOrder(const OrderID &orderID);
 
 private:
   // m_typeRank determines index in vector (uniformity)
@@ -118,7 +123,7 @@ private:
 
   std::unordered_set<OrderID> m_encounteredOrders;
   std::unordered_map<OrderID, OrderActionInfo>
-      m_processingOrders; // red-black-tree
+      m_processingOrderActInfo; // red-black-tree
   std::unordered_map<OrderID, OrderPointer> m_orderComposition;
 
   /* synchronous way

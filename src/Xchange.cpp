@@ -10,10 +10,12 @@
 #include "utils/enums/Side.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 //////////////////////////////////////
@@ -49,23 +51,25 @@ void Xchange::destroyInstance() {
 ///////// PARTICIPANT FUNCTIONALITY /
 ////////////////////////////////////
 
-std::size_t Xchange::getParticipantCount() { return m_participants.size(); }
-
 ParticipantID Xchange::generateParticipantID(const std::string &govId) {
+  if (govID_partIDMap.count(govId) > 0)
+    return govID_partIDMap.at(govId);
   std::size_t partCount = Xchange::getParticipantCount();
   ParticipantID partID = std::to_string(partCount);
   partID += ("_" + govId);
   return partID;
 }
 
-void Xchange::addParticipant(const std::string &govID) {
-  if (m_govIDs.count(govID) != 0)
-    return;
+ParticipantID Xchange::addParticipant(const std::string &govID) {
+  if (m_govIDs.count(govID) > 0 && govID_partIDMap.count(govID) > 0)
+    return govID_partIDMap.at(govID);
   m_govIDs.insert(govID);
   ParticipantID partID = Xchange::generateParticipantID(govID);
   ParticipantPointer freshParticipant = std::make_shared<Participant>();
   freshParticipant->setParticipantID(partID);
   m_participants[partID] = freshParticipant;
+  govID_partIDMap[govID] = partID;
+  return partID;
 }
 
 void Xchange::removeParticipant(const ParticipantID &participantID) {
@@ -86,28 +90,29 @@ void Xchange::removeParticipant(const ParticipantID &participantID) {
   std::reverse(partGovID.begin(), partGovID.end());
   assert(m_govIDs.count(partGovID) > 0);
   m_govIDs.erase(partGovID);
+  assert(govID_partIDMap.count(partGovID) > 0);
+  govID_partIDMap.erase(partGovID);
 }
 
 // unified interface for placing order on the exchange
-void Xchange::placeOrder(const ParticipantID &participantID,
-                         const Actions::Actions action,
-                         const std::optional<OrderID> &oldOrderID,
-                         const std::optional<Symbol> &symbol,
-                         const std::optional<Side::Side> side,
-                         const std::optional<OrderType::OrderType> orderType,
-                         const std::optional<double> price,
-                         const std::optional<Quantity> quantity,
-                         const std::optional<std::string> &activationTime,
-                         const std::optional<std::string> &deactivationTime) {
+std::optional<OrderID> Xchange::placeOrder(
+    const ParticipantID &participantID, const Actions::Actions action,
+    const std::optional<OrderID> &oldOrderID,
+    const std::optional<Symbol> &symbol, const std::optional<Side::Side> side,
+    const std::optional<OrderType::OrderType> orderType,
+    const std::optional<double> price, const std::optional<Quantity> quantity,
+    const std::optional<std::string> &activationTime,
+    const std::optional<std::string> &deactivationTime) {
 
   // Participant does not exist
   if (m_participants.count(participantID) == 0)
-    return;
+    return std::nullopt;
 
   // must be present in all orders (cancel, modify)
-  // cannot modify symbol, orderType (if needed explicit cancel and add done)
+  // cannot modify symbol, orderType, side (if needed explicit cancel and add
+  // done)
   if (!symbol.has_value() || !orderType.has_value())
-    return;
+    return std::nullopt;
 
   OrderPointer orderptr{nullptr};
   bool canNOTplaceOrder =
@@ -120,13 +125,15 @@ void Xchange::placeOrder(const ParticipantID &participantID,
         quantity.value(), participantID, activationTime.value(),
         deactivationTime.value());
   }
-
   SymbolInfoPointer symbolInfoPointer = m_symbolInfos[symbol.value()];
 
+  if (symbolInfoPointer == nullptr) {
+    return std::nullopt;
+  }
   if (action == Actions::Actions::Cancel ||
       action == Actions::Actions::Modify) {
     if (!oldOrderID.has_value())
-      return;
+      return std::nullopt;
 
     Side::Side decipheredSide =
         ((oldOrderID.value() & 0x1) ? (Side::Side::Buy) : (Side::Side::Sell));
@@ -134,20 +141,35 @@ void Xchange::placeOrder(const ParticipantID &participantID,
         ((decipheredSide == Side::Side::Buy) ? symbolInfoPointer->m_bidprepro
                                              : symbolInfoPointer->m_askprepro);
 
-    if (action == Actions::Actions::Modify && orderptr != nullptr)
+    if (action == Actions::Actions::Modify && orderptr != nullptr) {
+      auto const oldOrderInfo = m_participants.at(participantID)
+                                    ->getOrderInformation(oldOrderID.value());
+      std::cout << oldOrderInfo.symbol << std::endl;
+      if (oldOrderInfo.side != side || oldOrderInfo.otype != orderType ||
+          oldOrderInfo.symbol != symbol) {
+        throw std::logic_error("can NOT alter side, ordertype, symbol while "
+                               "modifying a previous order");
+        return std::nullopt;
+      }
       prePtr->ModifyInPreprocessing(oldOrderID.value(), orderptr);
-    else
+      return orderptr->getOrderID();
+    } else {
       prePtr->RemoveFromPreprocessing(oldOrderID.value(), orderType.value());
+      return std::nullopt;
+    }
   }
 
   if (orderptr == nullptr)
-    return;
+    return std::nullopt;
 
   PreProcessorPointer prePtr = (side.value() == Side::Side::Buy)
                                    ? symbolInfoPointer->m_bidprepro
                                    : symbolInfoPointer->m_askprepro;
+  if (prePtr == nullptr)
+    return std::nullopt;
+
   prePtr->InsertAddOrderIntoPreprocessing(orderptr);
-  // TODO: what about Participant?
+  return orderptr->getOrderID();
 }
 
 //////////////////////////////////////
@@ -167,18 +189,64 @@ void Xchange::retireOldSymbol(const std::string &SYMBOL) {
   m_symbolInfos.erase(SYMBOL);
 }
 
-OrderBookPointer Xchange::getOrderBook(const Symbol &SYMBOL) {
+OrderBookPointer Xchange::getOrderBook(const Symbol &SYMBOL) const {
   if (m_symbolInfos.count(SYMBOL) == 0)
     return nullptr;
-  return m_symbolInfos[SYMBOL]->m_orderbook;
+  return m_symbolInfos.at(SYMBOL)->m_orderbook;
 }
 
 PreProcessorPointer Xchange::getPreProcessor(const Symbol &SYMBOL,
-                                             Side::Side &side) {
+                                             const Side::Side &side) const {
   if (m_symbolInfos.count(SYMBOL) == 0)
     return nullptr;
   if (side == Side::Side::Buy)
-    return m_symbolInfos[SYMBOL]->m_bidprepro;
+    return m_symbolInfos.at(SYMBOL)->m_bidprepro;
   else
-    return m_symbolInfos[SYMBOL]->m_askprepro;
+    return m_symbolInfos.at(SYMBOL)->m_askprepro;
+}
+
+std::size_t Xchange::getOrderThreshold() const {
+  return MAX_PENDING_ORDERS_THRESHOLD;
+}
+
+std::uint64_t Xchange::getDurationThreshold() const {
+  return MAX_PENDING_DURATION.count();
+}
+
+bool Xchange::isGovIDPresent(const std::string &govID) const {
+  return (m_govIDs.count(govID) > 0);
+}
+
+bool Xchange::canMapGovIDToParticipantID(const std::string &govID) const {
+  return (govID_partIDMap.count(govID) > 0);
+}
+
+ParticipantID
+Xchange::getParticipantIDFromGovID(const std::string &govID) const {
+  if (govID_partIDMap.count(govID) == 0)
+    return "";
+  return govID_partIDMap.at(govID);
+}
+
+std::size_t Xchange::getParticipantCount() const {
+  return m_participants.size();
+}
+
+bool Xchange::isParticipantIDPresent(const std::string &partID) const {
+  return (m_participants.count(partID) > 0);
+}
+
+ParticipantPointer
+Xchange::getParticipantInfo(const std::string &partID) const {
+  if (!isParticipantIDPresent(partID))
+    return nullptr;
+  return m_participants.at(partID);
+}
+
+std::size_t Xchange::getSymbolsTradedCount() const {
+  return m_symbolInfos.size();
+}
+
+bool Xchange::isSymbolTraded(const std::string &symbol) const {
+  return (m_symbolInfos.count(symbol) > 0);
 }

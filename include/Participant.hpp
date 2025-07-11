@@ -6,6 +6,7 @@
 #include "utils/enums/Actions.hpp"
 #include "utils/enums/OrderTypes.hpp"
 #include "utils/enums/Side.hpp"
+#include <cstddef>
 #include <unordered_map>
 #include <vector>
 
@@ -14,11 +15,16 @@ private:
   struct ParticipantOrderInfo {
     OrderID orderID;
     Actions::Actions action;
+    Symbol symbol;
+    OrderType::OrderType otype;
+    Side::Side side;
 
     // rule of 3
     ParticipantOrderInfo() = default;
-    ParticipantOrderInfo(const OrderID &orderID,
-                         const Actions::Actions &action);
+    ParticipantOrderInfo(const OrderID &orderID, const Actions::Actions &action,
+                         const Symbol &symbol,
+                         const OrderType::OrderType &otype,
+                         const Side::Side &side);
     ~ParticipantOrderInfo() = default;
   };
 
@@ -46,10 +52,25 @@ public:
   void updatePortfolio(const Side::Side &side, const Trade &trade);
   void updateOrderStatus(const OrderID &matchedID);
 
-  ParticipantID getParticipantID();
-  Portfolio getPortfolio();
-  ParticipantOrderInfo getOrderInformation(OrderID &orderID);
-  std::vector<Trade> getHistoryOfTrades();
+  // const member functions can only be called by const participant objects
+  ParticipantID getParticipantID() const;
+
+  Portfolio getPortfolio() const;
+  std::size_t getNumberOfAssetsInPortfolio() const;
+  bool isSymbolInPortfolio(const std::string &symbol) const;
+  Amount getValuationOfPortfolio() const;
+
+  bool isParticularOrderPlacedByParticipant(const OrderID &orderID) const;
+  ParticipantOrderInfo getOrderInformation(const OrderID &orderID) const;
+  OrderPointer getOrder(const OrderID &OrderID) const;
+  std::size_t getNumberOfOrdersPlaced() const;
+  std::size_t getNumberOfPendingOrders() const;
+  std::size_t getNumberOfOrdersBeingProcessed() const;
+  std::size_t getNumberOfCancelledOrders() const;
+  std::size_t getNumberOfProcessedOrders() const;
+
+  std::size_t getNumberOfTrades() const;
+  std::vector<Trade> getHistoryOfTrades() const;
 
   void setParticipantID(const ParticipantID &newID);
 };

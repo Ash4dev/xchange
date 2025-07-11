@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <set>
 #include <unordered_map>
@@ -71,6 +72,10 @@ bool PreProcessor::OrderActionInfo::operator<(
 PreProcessor::PreProcessor(OrderBookPointer &orderbookPtr,
                            bool isBidPreprocessor)
     : m_orderbookPtr{orderbookPtr}, m_isBidPreprocessor{isBidPreprocessor} {
+  int typesz = m_typeRank.size();
+  m_laterProcessOrders.resize(typesz);
+  m_lastFlushTime = std::chrono::system_clock::now();
+
   MAX_PENDING_ORDERS_THRESHOLD = static_cast<std::size_t>(3);
   MAX_PENDING_DURATION = static_cast<std::chrono::milliseconds>(100);
 }
@@ -79,9 +84,8 @@ PreProcessor::PreProcessor(std::shared_ptr<OrderBook> &orderbookPtr,
                            bool isBidPreprocessor,
                            std::size_t pendingOrdersThreshold,
                            std::chrono::milliseconds pendingDurationThreshold)
-    : m_orderbookPtr(orderbookPtr) {
+    : m_orderbookPtr(orderbookPtr), m_isBidPreprocessor{isBidPreprocessor} {
   int typesz = m_typeRank.size();
-  m_isBidPreprocessor = isBidPreprocessor;
   m_laterProcessOrders.resize(typesz);
   m_lastFlushTime = std::chrono::system_clock::now();
 
@@ -101,14 +105,17 @@ void PreProcessor::InsertIntoPreprocessing(
   m_laterProcessOrders[typeId].insert(orderactinfo); // add to specific multiset
   m_encounteredOrders.insert(orderactinfo.orderID);
 
-  m_processingOrders[orderactinfo.orderID] = orderactinfo;
+  m_processingOrderActInfo[orderactinfo.orderID] = orderactinfo;
   PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
 }
 
 void PreProcessor::InsertAddOrderIntoPreprocessing(
     const OrderPointer &orderptr) {
+  if (orderptr == nullptr)
+    return;
+
   OrderID currOrderId = orderptr->getOrderID();
-  if (m_orderComposition.count(currOrderId) != 0)
+  if (m_orderComposition.count(currOrderId) > 0)
     return;
 
   if (orderptr->getOrderType() == OrderType::OrderType::GoodForDay) {
@@ -130,34 +137,86 @@ void PreProcessor::InsertCancelOrderIntoPreProcessing(
   PreProcessor::InsertIntoPreprocessing(orderactinfo);
 }
 
+// cannot cancel an cancel order (need to replace original order again)
 void PreProcessor::RemoveFromPreprocessing(
     const OrderID &orderId, const OrderType::OrderType &orderType) {
-
-  // cannot cancel an cancel order (need to replace original order again)
 
   // never ever seen this order
   if (m_encounteredOrders.count(orderId) == 0)
     return;
 
-  if (m_processingOrders.count(orderId) == 0) {
+  int typeId = m_typeRank.at(orderType);
+  std::optional<OrderActionInfo> corrordactinfo = std::nullopt;
+  if (m_processingOrderActInfo.count(orderId) > 0)
+    corrordactinfo = m_processingOrderActInfo.at(orderId);
+  std::multiset<OrderActionInfo>::iterator it =
+      m_laterProcessOrders.at(typeId).end();
+  if (corrordactinfo.has_value())
+    it = m_laterProcessOrders.at(typeId).find(corrordactinfo.value());
+
+  // if partial record found
+  bool intoOrderBookAlready = true;
+  if (m_orderComposition.count(orderId) == 0 ||
+      m_processingOrderActInfo.count(orderId) == 0 ||
+      it == m_laterProcessOrders.at(typeId).end()) {
+    intoOrderBookAlready = false;
+  }
+
+  if (intoOrderBookAlready) {
     // if already into orderbook, preprocess reverse of the original request
     PreProcessor::InsertCancelOrderIntoPreProcessing(orderId, orderType);
+    PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
     return;
   }
 
   // order still being processed
-  OrderActionInfo corrordactinfo = m_processingOrders[orderId];
-  int typeId = m_typeRank[orderType];
+  if (m_processingOrderActInfo.count(orderId) > 0)
+    m_processingOrderActInfo.erase(orderId); // orderactinfo
+  if (m_orderComposition.count(orderId) > 0)
+    m_orderComposition.erase(orderId); // orderptr
+  if (it != m_laterProcessOrders.at(typeId).end())
+    m_laterProcessOrders.at(typeId).erase(it); // just before exit
 
-  // if identical order add and cancel?? eliminate on spot
-  auto it = m_laterProcessOrders[typeId].find(corrordactinfo);
-  if (it != m_laterProcessOrders[typeId].end()) {
-    m_laterProcessOrders[typeId].erase(it);
-    m_processingOrders.erase(orderId); // no more use of storing seen order
-    PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
-    return;
-  }
+  PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
 }
+
+//
+// void PreProcessor::RemoveFromPreprocessing(
+//     const OrderID &orderId, const OrderType::OrderType &orderType) {
+//   // cannot cancel an cancel order (need to replace original order again)
+//
+//   // never ever seen this order
+//   if (m_encounteredOrders.count(orderId) == 0)
+//     return;
+//
+//
+//   if (m_orderComposition.count(orderId) == 0 ||
+//       m_processingOrderActInfo.count(orderId) == 0) {
+//     if (m_processingOrderActInfo.count(orderId) > 0)
+//       m_processingOrderActInfo.erase(orderId); // orderactinfo
+//     if (m_orderComposition.count(orderId) > 0)
+//       m_orderComposition.erase(orderId); // orderptr
+//     // if already into orderbook, preprocess reverse of the original request
+//     PreProcessor::InsertCancelOrderIntoPreProcessing(orderId, orderType);
+//     return;
+//   }
+//
+//   // order still being processed
+//   OrderActionInfo corrordactinfo = m_processingOrderActInfo[orderId];
+//   int typeId = m_typeRank[orderType];
+//
+//   // no more use of storing deleted information for an order
+//   m_processingOrderActInfo.erase(orderId); // orderactinfo
+//   m_orderComposition.erase(orderId);       // orderptr
+//
+//   // if identical order add and cancel?? eliminate on spot
+//   auto it = m_laterProcessOrders[typeId].find(corrordactinfo);
+//   if (it != m_laterProcessOrders[typeId].end()) {
+//     m_laterProcessOrders[typeId].erase(it);
+//   }
+//   PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
+//   return;
+// }
 
 void PreProcessor::ModifyInPreprocessing(const OrderID &oldID,
                                          const OrderPointer &orderptr) {
@@ -301,15 +360,15 @@ void PreProcessor::ClearSeenOrdersWhenMatched() {
 
     if (m_orderComposition.count(bidId) > 0 &&
         m_orderComposition[bidId]->getRemainingQuantity() == 0) {
-      if (m_processingOrders.count(bidId) > 0)
-        m_processingOrders.erase(bidId);
+      if (m_processingOrderActInfo.count(bidId) > 0)
+        m_processingOrderActInfo.erase(bidId);
       m_orderComposition.erase(bidId);
     }
 
     if (m_orderComposition.count(askId) > 0 &&
         m_orderComposition[askId]->getRemainingQuantity() == 0) {
-      if (m_processingOrders.count(askId) > 0)
-        m_processingOrders.erase(askId);
+      if (m_processingOrderActInfo.count(askId) > 0)
+        m_processingOrderActInfo.erase(askId);
       m_orderComposition.erase(askId);
     }
   }
@@ -470,6 +529,30 @@ TimeStamp PreProcessor::getNextMarketTime(bool isOpen) {
   }
 
   return target_time;
+}
+
+std::size_t
+PreProcessor::NumberOfOrdersBeingProcessed(const OrderType::OrderType &otype) {
+  if (m_typeRank.count(otype) == 0)
+    return 0;
+  return m_laterProcessOrders.at(m_typeRank.at(otype)).size();
+}
+
+bool PreProcessor::hasOrderBeenEncountered(const OrderID &orderID) {
+  return (m_encounteredOrders.count(orderID) > 0);
+}
+
+std::optional<PreProcessor::OrderActionInfo>
+PreProcessor::getOrderInfo(const OrderID &orderID) {
+  if (m_processingOrderActInfo.count(orderID) <= 0)
+    return std::nullopt;
+  return m_processingOrderActInfo.at(orderID);
+}
+
+OrderPointer PreProcessor::getOrder(const OrderID &orderID) {
+  if (m_orderComposition.count(orderID) <= 0)
+    return nullptr;
+  return m_orderComposition.at(orderID);
 }
 /*
 ////////////////////////////////////////////////
