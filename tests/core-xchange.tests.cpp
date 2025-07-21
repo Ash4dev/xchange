@@ -11,7 +11,7 @@
 #include <optional>
 #include <string>
 
-TEST(Xchage, SetUpCheck) {
+TEST(Xchange, SetUpCheck) {
   Xchange &xchange = Xchange::getInstance(3, 1000);
   ASSERT_EQ(xchange.getOrderThreshold(), 3);
   ASSERT_EQ(xchange.getDurationThreshold(), 1000);

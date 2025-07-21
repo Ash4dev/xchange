@@ -55,7 +55,8 @@ bool PreProcessor::OrderActionInfo::operator<(
   auto otherTime = (otherID >> 32);
 
   if (thisPrice == otherPrice) {
-    return thisTime <= otherTime;
+    // must be < not <= since == op works as !(a<b) & !(b<a) in multiset
+    return thisTime < otherTime;
   }
 
   if (thisSide == Side::Side::Buy) {
@@ -139,21 +140,20 @@ void PreProcessor::InsertCancelOrderIntoPreProcessing(
 
 bool PreProcessor::hasOrderEnteredOrderbook(
     const OrderID &orderId, const OrderType::OrderType &orderType) {
-  int typeId = m_typeRank.at(orderType);
+
   std::optional<OrderActionInfo> corrordactinfo = std::nullopt;
-  if (m_processingOrderActInfo.count(orderId) > 0)
+  if (m_processingOrderActInfo.contains(orderId))
     corrordactinfo = m_processingOrderActInfo.at(orderId);
-  std::multiset<OrderActionInfo>::iterator it =
-      m_laterProcessOrders.at(typeId).end();
-  if (corrordactinfo.has_value())
-    it = m_laterProcessOrders.at(typeId).find(corrordactinfo.value());
+
+  int typeId = m_typeRank.at(orderType);
 
   // if partial record found
   bool intoOrderBookAlready = true;
-  if (m_orderComposition.count(orderId) == 0 ||
-      m_processingOrderActInfo.count(orderId) == 0 ||
-      it == m_laterProcessOrders.at(typeId).end()) {
-    intoOrderBookAlready = false;
+  if (m_orderComposition.contains(orderId) &&
+      m_processingOrderActInfo.contains(orderId)) {
+    if (corrordactinfo.has_value() &&
+        m_laterProcessOrders.at(typeId).contains(corrordactinfo.value()))
+      intoOrderBookAlready = false;
   }
   return intoOrderBookAlready;
 }
@@ -174,16 +174,24 @@ void PreProcessor::RemoveFromPreprocessing(
   }
 
   // order still being processed
-  if (m_processingOrderActInfo.count(orderId) > 0)
-    m_processingOrderActInfo.erase(orderId); // orderactinfo
-  if (m_orderComposition.count(orderId) > 0)
+
+  if (m_orderComposition.contains(orderId)) {
     m_orderComposition.erase(orderId); // orderptr
+  }
+
+  std::optional<OrderActionInfo> ordactinfo = std::nullopt;
+  if (m_processingOrderActInfo.contains(orderId)) {
+    ordactinfo = m_processingOrderActInfo.at(orderId);
+    m_processingOrderActInfo.erase(orderId); // orderactinfo
+  }
 
   int typeId = m_typeRank.at(orderType);
-  std::multiset<OrderActionInfo>::iterator it =
-      m_laterProcessOrders.at(typeId).end();
-  if (it != m_laterProcessOrders.at(typeId).end())
-    m_laterProcessOrders.at(typeId).erase(it); // just before exit
+  if (ordactinfo.has_value()) {
+    auto it = m_laterProcessOrders.at(typeId).find(ordactinfo.value());
+    if (it != m_laterProcessOrders.at(typeId).end()) {
+      m_laterProcessOrders.at(typeId).erase(it); // just before exit
+    }
+  }
 
   PreProcessor::TryFlush(); // flush to see if PreProcessor can clean up
 }
@@ -203,13 +211,17 @@ Flushing out, Queueing in Wait Queue, EmptyWaitQueue
 ////////////////////////////////////////////////
 */
 
-void PreProcessor::TryFlush() {
-  // qty buffered
+std::size_t PreProcessor::getBufferedOrderCount() {
   std::size_t totalBufferedOrders = 0;
-  for (const std::multiset<OrderActionInfo> &typeRankedOrders :
-       m_laterProcessOrders) {
+  for (const auto &typeRankedOrders : m_laterProcessOrders) {
     totalBufferedOrders += typeRankedOrders.size();
   }
+  return totalBufferedOrders;
+}
+
+void PreProcessor::TryFlush() {
+  // qty buffered
+  std::size_t totalBufferedOrders = getBufferedOrderCount();
 
   // time interval
   auto now = std::chrono::system_clock::now();
@@ -220,9 +232,11 @@ void PreProcessor::TryFlush() {
   // hybrid flush model: qty or time interval (synchronous)
   if (totalBufferedOrders >= MAX_PENDING_ORDERS_THRESHOLD ||
       durationSinceLastFlush >= MAX_PENDING_DURATION) {
+    std::cout << "FLUSH STARTED" << std::endl;
     QueueOrdersIntoWaitQueue();
     EmptyWaitQueue();
     m_lastFlushTime = now;
+    std::cout << "FLUSH ENDED" << std::endl;
   }
 }
 
@@ -244,11 +258,11 @@ void PreProcessor::QueueOrdersIntoWaitQueue() {
 }
 
 void PreProcessor::EmptyTypeRankedOrders(
-    std::multiset<OrderActionInfo> &typeRankedOrders) {
+    std::set<OrderActionInfo> &typeRankedOrders) {
   if (typeRankedOrders.empty())
     return;
 
-  std::multiset<PreProcessor::OrderActionInfo> copyOfTypeRankedOrders =
+  std::set<PreProcessor::OrderActionInfo> copyOfTypeRankedOrders =
       typeRankedOrders;
 
   std::vector<PreProcessor::OrderActionInfo> insertedinWaitQueue;
@@ -271,9 +285,9 @@ void PreProcessor::EmptyTypeRankedOrders(
 
     // ATTEMPT 2: successful loop on copyOfTypeRankedOrders (SIZE <=
     // MAX_PENDING_ORDERS_THRESHOLD)
-    if (typeRankedOrders.find(orderactinfo) == typeRankedOrders.end())
-      continue;
-
+    // if (typeRankedOrders.find(orderactinfo) == typeRankedOrders.end())
+    //   continue;
+    //
     if (orderactinfo.action == Actions::Actions::Add) {
       if (!PreProcessor::canMatchOrder(orderactinfo.orderID))
         continue;
@@ -287,7 +301,7 @@ void PreProcessor::EmptyTypeRankedOrders(
     auto it = typeRankedOrders.find(orderactinfo);
     if (it == typeRankedOrders.end())
       continue;
-    typeRankedOrders.erase(it);
+    typeRankedOrders.erase(orderactinfo);
   }
 }
 
@@ -301,13 +315,20 @@ void PreProcessor::EmptyWaitQueue() {
     return;
   }
   while (!m_waitQueue.empty()) {
-    auto &[orderID, _, action] = m_waitQueue.front();
+    OrderActionInfo orderactinfo = m_waitQueue.front();
+    auto &[orderID, type, action] = orderactinfo;
     m_waitQueue.pop();
+    assert(action != Actions::Actions::Modify);
+
+    // forward to orderbook for relevant operation
     if (action == Actions::Actions::Add &&
         m_orderComposition.count(orderID) > 0)
       m_orderbookPtr->AddOrder(*m_orderComposition[orderID]);
     else
       m_orderbookPtr->CancelOrder(orderID);
+
+    // change status from to be processed later since added into orderbook
+    m_laterProcessOrders.at(m_typeRank[type]).erase(orderactinfo);
   }
   PreProcessor::ClearSeenOrdersWhenMatched();
 }
@@ -321,25 +342,16 @@ void PreProcessor::ClearSeenOrdersWhenMatched() {
     const auto &trade = *it;
     OrderID bidId = trade.getMatchedBid().orderID;
     OrderID askId = trade.getMatchedAsk().orderID;
+    OrderID orderId = ((m_isBidPreprocessor == true) ? bidId : askId);
 
     // trade cannot happen on the basis of a cancel order hence it must be add
     // stop once an trade has been encountered and cleared previously
-    if ((m_orderComposition.count(bidId) == 0) ||
-        (m_orderComposition.count(askId) == 0))
-      return;
 
-    if (m_orderComposition.count(bidId) > 0 &&
-        m_orderComposition[bidId]->getRemainingQuantity() == 0) {
-      if (m_processingOrderActInfo.count(bidId) > 0)
-        m_processingOrderActInfo.erase(bidId);
-      m_orderComposition.erase(bidId);
-    }
-
-    if (m_orderComposition.count(askId) > 0 &&
-        m_orderComposition[askId]->getRemainingQuantity() == 0) {
-      if (m_processingOrderActInfo.count(askId) > 0)
-        m_processingOrderActInfo.erase(askId);
-      m_orderComposition.erase(askId);
+    if (m_orderComposition.count(orderId) > 0 &&
+        m_orderComposition[orderId]->getRemainingQuantity() == 0) {
+      if (m_processingOrderActInfo.count(orderId) > 0)
+        m_processingOrderActInfo.erase(orderId);
+      m_orderComposition.erase(orderId);
     }
   }
 }
@@ -501,6 +513,8 @@ TimeStamp PreProcessor::getNextMarketTime(bool isOpen) {
   return target_time;
 }
 
+std::size_t PreProcessor::getNumberOfOrderTypes() { return m_typeRank.size(); }
+
 std::size_t
 PreProcessor::NumberOfOrdersBeingProcessed(const OrderType::OrderType &otype) {
   if (m_typeRank.count(otype) == 0)
@@ -524,6 +538,25 @@ OrderPointer PreProcessor::getOrder(const OrderID &orderID) {
     return nullptr;
   return m_orderComposition.at(orderID);
 }
+
+std::size_t PreProcessor::getMaxPendingOrdersThreshold() const {
+  return MAX_PENDING_ORDERS_THRESHOLD;
+}
+
+void PreProcessor::setMaxPendingOrdersThreshold(std::size_t threshold) {
+  MAX_PENDING_ORDERS_THRESHOLD = threshold;
+}
+
+std::chrono::milliseconds PreProcessor::getMaxPendingDuration() const {
+  return MAX_PENDING_DURATION;
+}
+
+void PreProcessor::setMaxPendingDuration(std::chrono::milliseconds threshold) {
+  MAX_PENDING_DURATION = threshold;
+}
+
+std::size_t PreProcessor::getWaitQueueSize() { return m_waitQueue.size(); }
+
 /*
 ////////////////////////////////////////////////
 Printing Debugging UTILITIES

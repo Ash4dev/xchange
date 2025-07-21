@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-TEST(Particpant, SetUpCheck) {
+TEST(Participant, SetUpCheck) {
   Xchange &xchange = Xchange::getInstance(3, 1000);
   ParticipantID partId = xchange.addParticipant("NUBE");
   const ParticipantPointer part = xchange.getParticipantInfo(partId);
@@ -45,12 +45,12 @@ TEST(Participant, AddOrderRecorded) {
                             symbol, Side::Side::Buy,
                             OrderType::OrderType::Market, 124.32, 4,
                             "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+  Xchange::destroyInstance();
 }
 
 TEST(Participant, CancelOrderCleared) {
-  Xchange &xchange = Xchange::getInstance(3, 1000);
+  Xchange &xchange = Xchange::getInstance(30, 100000000);
   ParticipantID partId = xchange.addParticipant("NUME");
-
   const std::string symbol1 = "SPY";
   xchange.tradeNewSymbol(symbol1);
   std::optional<OrderID> orderId1 = xchange.placeOrder(
@@ -64,7 +64,7 @@ TEST(Participant, CancelOrderCleared) {
                          4, "01-07-2025 19:12:27", "01-01-2100 00:00:00");
 
   xchange.placeOrder(partId, Actions::Actions::Cancel, orderId1.value(),
-                     symbol1, Side::Side::Buy, OrderType::OrderType::Market,
+                     symbol1, Side::Side::Sell, OrderType::OrderType::AllOrNone,
                      std::nullopt, std::nullopt, std::nullopt, std::nullopt);
 
   verifyAddOrderInformation(xchange.getParticipantInfo(partId),
@@ -72,10 +72,12 @@ TEST(Participant, CancelOrderCleared) {
                             OrderType::OrderType::Market, 124.32, 4,
                             "01-07-2025 19:12:27", "01-01-2100 00:00:00");
 
+  ASSERT_NE(xchange.getParticipantInfo(partId), nullptr);
   ASSERT_EQ(
       xchange.getParticipantInfo(partId)->isParticularOrderPlacedByParticipant(
           orderId1.value()),
       false);
+  Xchange::destroyInstance();
 }
 
 TEST(Participant, ModifyOrderRecorded) {
@@ -87,6 +89,11 @@ TEST(Participant, ModifyOrderRecorded) {
       xchange.placeOrder(partId1, Actions::Actions::Add, std::nullopt, symbol1,
                          Side::Side::Buy, OrderType::OrderType::Market, 124.32,
                          4, "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+
+  verifyAddOrderInformation(xchange.getParticipantInfo(partId1),
+                            orderId1.value(), symbol1, Side::Side::Buy,
+                            OrderType::OrderType::Market, 124.32, 4,
+                            "01-07-2025 19:12:27", "01-01-2100 00:00:00");
 
   std::optional<OrderID> orderId2 = xchange.placeOrder(
       partId1, Actions::Actions::Modify, orderId1.value(), symbol1,

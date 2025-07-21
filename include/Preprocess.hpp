@@ -10,6 +10,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -68,13 +69,16 @@ public:
                              const OrderPointer &orderptr);
 
   bool canMatchOrder(const OrderID &orderID);
-  void EmptyTypeRankedOrders(std::multiset<OrderActionInfo> &typeRankedOrders);
+  void EmptyTypeRankedOrders(std::set<OrderActionInfo> &typeRankedOrders);
   void QueueOrdersIntoWaitQueue();
   void EmptyWaitQueue();
   void TryFlush();
   // clear these orders from seenOrders once matched to control size
   void ClearSeenOrdersWhenMatched();
 
+  std::size_t getWaitQueueSize();
+  std::size_t getBufferedOrderCount();
+  std::size_t getNumberOfOrderTypes();
   std::size_t NumberOfOrdersBeingProcessed(const OrderType::OrderType &otype);
   bool hasOrderBeenEncountered(const OrderID &orderID);
   std::optional<OrderActionInfo> getOrderInfo(const OrderID &orderID);
@@ -121,7 +125,7 @@ private:
   // independence across symbols will also be maintained
   std::shared_ptr<OrderBook> m_orderbookPtr;
   bool m_isBidPreprocessor;
-  std::vector<std::multiset<OrderActionInfo>> m_laterProcessOrders;
+  std::vector<std::set<OrderActionInfo>> m_laterProcessOrders;
   std::queue<OrderActionInfo> m_waitQueue;
   std::chrono::system_clock::time_point m_lastFlushTime;
 

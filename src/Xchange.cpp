@@ -105,6 +105,9 @@ std::optional<OrderID> Xchange::placeOrder(
   if (!symbol.has_value() || !orderType.has_value() || !side.has_value())
     return std::nullopt; // presence must (not modifiable: explicit c+a)
 
+  if (action != Actions::Actions::Add && !oldOrderID.has_value())
+    return std::nullopt; // cancel/modify must have oldOrderID for deletion
+
   OrderPointer orderptr{nullptr};
   bool canNOTplaceOrder =
       (!price.has_value() || !quantity.has_value() ||
@@ -118,13 +121,9 @@ std::optional<OrderID> Xchange::placeOrder(
         deactivationTime.value());
   }
 
-  if (action != Actions::Actions::Add && !oldOrderID.has_value())
-    return std::nullopt; // cancel/modify must have oldOrderID for deletion
-
   SymbolInfoPointer symbolInfoPointer = m_symbolInfos.at(symbol.value());
-  if (symbolInfoPointer == nullptr) {
+  if (symbolInfoPointer == nullptr)
     return std::nullopt;
-  }
 
   PreProcessorPointer prePtr =
       ((side == Side::Side::Buy) ? symbolInfoPointer->m_bidprepro
@@ -132,20 +131,7 @@ std::optional<OrderID> Xchange::placeOrder(
   if (prePtr == nullptr)
     return std::nullopt;
 
-  if (action == Actions::Actions::Cancel) {
-    bool hasEntered = (prePtr->hasOrderEnteredOrderbook(oldOrderID.value(),
-                                                        orderType.value()));
-    if (!hasEntered)
-      getParticipantInfo(participantID)->recordCancelOrder(oldOrderID.value());
-    prePtr->RemoveFromPreprocessing(oldOrderID.value(), orderType.value());
-    return std::nullopt;
-  }
-
-  // Add/Modify actions only possible
-  if (orderptr == nullptr)
-    return std::nullopt;
-
-  if (action == Actions::Actions::Add) {
+  if (action == Actions::Actions::Add && orderptr != nullptr) {
     prePtr->InsertAddOrderIntoPreprocessing(orderptr);
     return orderptr->getOrderID();
   }
@@ -158,12 +144,29 @@ std::optional<OrderID> Xchange::placeOrder(
                            "modifying a previous order");
     return std::nullopt;
   }
+
   bool hasEntered =
       (prePtr->hasOrderEnteredOrderbook(oldOrderID.value(), orderType.value()));
+
+  // getParticipantInfo(participantID)->recordCancelOrder(oldOrderID.value());
   if (!hasEntered)
     getParticipantInfo(participantID)->recordCancelOrder(oldOrderID.value());
-  prePtr->ModifyInPreprocessing(oldOrderID.value(), orderptr);
-  return orderptr->getOrderID();
+  else
+    std::cout << "WHY NOT FUCKING CANCEL RECORDED!" << std::endl;
+
+  if (action == Actions::Actions::Modify) {
+    if (orderptr == nullptr)
+      return std::nullopt;
+
+    prePtr->ModifyInPreprocessing(oldOrderID.value(), orderptr);
+    return orderptr->getOrderID();
+  }
+
+  if (action == Actions::Actions::Cancel) {
+    prePtr->RemoveFromPreprocessing(oldOrderID.value(), orderType.value());
+    return std::nullopt;
+  }
+  return std::nullopt;
 }
 
 //////////////////////////////////////
@@ -173,7 +176,8 @@ std::optional<OrderID> Xchange::placeOrder(
 void Xchange::tradeNewSymbol(const std::string &SYMBOL) {
   if (m_symbolInfos.count(SYMBOL) > 0)
     return;
-  SymbolInfoPointer symPtr{std::make_shared<SymbolInfo>(SYMBOL)};
+  SymbolInfoPointer symPtr{std::make_shared<SymbolInfo>(
+      SYMBOL, MAX_PENDING_ORDERS_THRESHOLD, MAX_PENDING_DURATION)};
   m_symbolInfos[SYMBOL] = symPtr;
 }
 
