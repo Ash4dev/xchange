@@ -13,7 +13,6 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <queue>
 #include <set>
 #include <string>
 #include <tuple>
@@ -68,15 +67,13 @@ public:
   void ModifyInPreprocessing(const OrderID &oldID,
                              const OrderPointer &orderptr);
 
-  bool canMatchOrder(const OrderID &orderID);
-  void EmptyTypeRankedOrders(std::set<OrderActionInfo> &typeRankedOrders);
-  void QueueOrdersIntoWaitQueue();
-  void EmptyWaitQueue();
   void TryFlush();
-  // clear these orders from seenOrders once matched to control size
+  void QueueOrdersForInsertion();
+  void EmptyTypeRankedOrders(std::set<OrderActionInfo> &typeRankedOrders);
+  void EmptyOrderIntoOrderbook(const OrderActionInfo &ordactinfo);
+  bool canInsertOrderIntoOrderbook(const OrderID &orderID);
   void ClearSeenOrdersWhenMatched();
 
-  std::size_t getWaitQueueSize();
   std::size_t getBufferedOrderCount();
   std::size_t getNumberOfOrderTypes();
   std::size_t NumberOfOrdersBeingProcessed(const OrderType::OrderType &otype);
@@ -126,7 +123,6 @@ private:
   std::shared_ptr<OrderBook> m_orderbookPtr;
   bool m_isBidPreprocessor;
   std::vector<std::set<OrderActionInfo>> m_laterProcessOrders;
-  std::queue<OrderActionInfo> m_waitQueue;
   std::chrono::system_clock::time_point m_lastFlushTime;
 
   std::unordered_set<OrderID> m_encounteredOrders;

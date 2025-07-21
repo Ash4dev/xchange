@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 TEST(PreProcessor, SetUpCheck) {
   Xchange &xchange = Xchange::getInstance(3, 1000);
@@ -40,7 +41,7 @@ TEST(PreProcessor, SetUpCheck) {
 // for Order Addition, Cancellation and Modification
 
 TEST(PreProcessor, IsFlushedDueToOrderThresold) {
-  Xchange &xchange = Xchange::getInstance(3, 1000);
+  Xchange &xchange = Xchange::getInstance(3, 1000000);
   xchange.tradeNewSymbol("SPY");
   xchange.tradeNewSymbol("APL");
   ParticipantID partId1 = xchange.addParticipant("LOLOLO");
@@ -55,7 +56,7 @@ TEST(PreProcessor, IsFlushedDueToOrderThresold) {
       1);
   std::optional<OrderID> orderId2 = xchange.placeOrder(
       partId2, Actions::Actions::Add, std::nullopt, "SPY", Side::Side::Buy,
-      OrderType::OrderType::GoodAfterTime, 121.89, 1, "21-08-2025 19:12:27",
+      OrderType::OrderType::GoodAfterTime, 121.89, 1, "20-07-2025 19:12:27",
       "01-01-2100 00:00:00");
   ASSERT_EQ(
       xchange.getPreProcessor("SPY", Side::Side::Buy)->getBufferedOrderCount(),
@@ -77,12 +78,62 @@ TEST(PreProcessor, IsFlushedDueToOrderThresold) {
   ASSERT_EQ(
       xchange.getPreProcessor("APL", Side::Side::Buy)->getBufferedOrderCount(),
       1);
+  // flush started and GoodTillCancel & GoodAfterTime order can be inserted
   EXPECT_EQ(
       xchange.getPreProcessor("SPY", Side::Side::Buy)->getBufferedOrderCount(),
-      0);
-  std::cout
-      << xchange.getPreProcessor("SPY", Side::Side::Buy)->getWaitQueueSize()
-      << std::endl;
+      3 - 2);
+  (orderId1.has_value() || orderId2.has_value() || orderId3.has_value() ||
+   orderId4.has_value());
+  Xchange::destroyInstance();
+}
+
+TEST(PreProcessor, IsFlushedDueToDurationThresold) {
+  Xchange &xchange = Xchange::getInstance(30, 1);
+  xchange.tradeNewSymbol("SPY");
+  xchange.tradeNewSymbol("APL");
+  ParticipantID partId1 = xchange.addParticipant("LOLOLO");
+  ParticipantID partId2 = xchange.addParticipant("YOLLOOO");
+
+  std::optional<OrderID> orderId1 = xchange.placeOrder(
+      partId1, Actions::Actions::Add, std::nullopt, "SPY", Side::Side::Buy,
+      OrderType::OrderType::GoodTillCancel, 124.32, 4, "01-07-2025 19:12:27",
+      "01-01-2100 00:00:00");
+  ASSERT_EQ(
+      xchange.getPreProcessor("SPY", Side::Side::Buy)->getBufferedOrderCount(),
+      1);
+  std::optional<OrderID> orderId2 = xchange.placeOrder(
+      partId2, Actions::Actions::Add, std::nullopt, "SPY", Side::Side::Buy,
+      OrderType::OrderType::GoodAfterTime, 121.89, 1, "20-07-2025 19:12:27",
+      "01-01-2100 00:00:00");
+  ASSERT_EQ(
+      xchange.getPreProcessor("SPY", Side::Side::Buy)->getBufferedOrderCount(),
+      2);
+  std::optional<OrderID> orderId3 = xchange.placeOrder(
+      partId1, Actions::Actions::Add, std::nullopt, "APL", Side::Side::Buy,
+      OrderType::OrderType::FillOrKill, 1243.2, 23, "01-07-2025 19:12:27",
+      "01-01-2100 00:00:00");
+  for (int i = 0; i < 100000; i++) {
+    for (int j = 0; j < 100000; j++) {
+      ;
+    }
+  }
+  ASSERT_EQ(
+      xchange.getPreProcessor("APL", Side::Side::Buy)->getBufferedOrderCount(),
+      1);
+  ASSERT_EQ(
+      xchange.getPreProcessor("SPY", Side::Side::Buy)->getBufferedOrderCount(),
+      2);
+  std::optional<OrderID> orderId4 = xchange.placeOrder(
+      partId1, Actions::Actions::Add, std::nullopt, "SPY", Side::Side::Buy,
+      OrderType::OrderType::AllOrNone, 119.90, 67, "01-08-2025 19:12:27",
+      "01-01-2100 00:00:00");
+  ASSERT_EQ(
+      xchange.getPreProcessor("APL", Side::Side::Buy)->getBufferedOrderCount(),
+      1);
+  // flush started and GoodTillCancel & GoodAfterTime order can be inserted
+  EXPECT_EQ(
+      xchange.getPreProcessor("SPY", Side::Side::Buy)->getBufferedOrderCount(),
+      3 - 2);
   (orderId1.has_value() || orderId2.has_value() || orderId3.has_value() ||
    orderId4.has_value());
   Xchange::destroyInstance();

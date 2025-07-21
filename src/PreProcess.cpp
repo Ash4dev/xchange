@@ -219,6 +219,13 @@ std::size_t PreProcessor::getBufferedOrderCount() {
   return totalBufferedOrders;
 }
 
+unsigned long long int
+printTimeStamp(const std::chrono::system_clock::time_point &tt) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             tt.time_since_epoch())
+      .count();
+}
+
 void PreProcessor::TryFlush() {
   // qty buffered
   std::size_t totalBufferedOrders = getBufferedOrderCount();
@@ -229,18 +236,21 @@ void PreProcessor::TryFlush() {
       std::chrono::duration_cast<std::chrono::milliseconds>(now -
                                                             m_lastFlushTime);
 
+  // std::cout << "Now " << printTimeStamp(now) << " "
+  //           << "last: " << printTimeStamp(m_lastFlushTime) << std::endl;
+  // std::cout << durationSinceLastFlush.count() << std::endl;
+
   // hybrid flush model: qty or time interval (synchronous)
   if (totalBufferedOrders >= MAX_PENDING_ORDERS_THRESHOLD ||
       durationSinceLastFlush >= MAX_PENDING_DURATION) {
-    std::cout << "FLUSH STARTED" << std::endl;
-    QueueOrdersIntoWaitQueue();
-    EmptyWaitQueue();
+    // std::cout << "FLUSH STARTED" << std::endl;
+    QueueOrdersForInsertion();
     m_lastFlushTime = now;
-    std::cout << "FLUSH ENDED" << std::endl;
+    // std::cout << "FLUSH ENDED" << std::endl;
   }
 }
 
-void PreProcessor::QueueOrdersIntoWaitQueue() {
+void PreProcessor::QueueOrdersForInsertion() {
   auto now = std::chrono::system_clock::now();
   auto now_min = std::chrono::time_point_cast<std::chrono::minutes>(now);
 
@@ -265,71 +275,65 @@ void PreProcessor::EmptyTypeRankedOrders(
   std::set<PreProcessor::OrderActionInfo> copyOfTypeRankedOrders =
       typeRankedOrders;
 
-  std::vector<PreProcessor::OrderActionInfo> insertedinWaitQueue;
   for (const PreProcessor::OrderActionInfo &orderactinfo :
        copyOfTypeRankedOrders) {
     // cancel order can always be inserted into orderbook
-    // if to be added but can't be matched no sense in putting to wait queue
 
-    // use of canMatchOrder has RemoveFromPreprocessing embedded on looping with
-    // typeRankedOrders can affect size of typeRankedOrders (decreases) -> cause
-    // of seg fault
-    // what causes: https://stackoverflow.com/a/3719031/19817062 (gdb)
-    // why caused: https://stackoverflow.com/a/3719076/19817062 (valgrind)
-    // valgrind --leak-check=full -s ./bin/orderbook (-s: show error list)
+    // use of canInsertOrderIntoOrderbook has RemoveFromPreprocessing embedded
+    // on looping with typeRankedOrders can affect size of typeRankedOrders
+    // (decreases) -> cause of seg fault what causes:
+    // https://stackoverflow.com/a/3719031/19817062 (gdb) why caused:
+    // https://stackoverflow.com/a/3719076/19817062 (valgrind) valgrind
+    // --leak-check=full -s ./bin/orderbook (-s: show error list)
     // https://docs.google.com/document/d/1OhOvXoePXU5l7TkWUzPs-1HU424P9buZekG7lluupq8/edit?usp=sharing
 
-    // ATTEMPT 1: failed loop on typeRankedOrders itself
-    // if (typeRankedOrders.find(orderactinfo) == typeRankedOrders.end())
-    //   continue;
-
-    // ATTEMPT 2: successful loop on copyOfTypeRankedOrders (SIZE <=
-    // MAX_PENDING_ORDERS_THRESHOLD)
-    // if (typeRankedOrders.find(orderactinfo) == typeRankedOrders.end())
-    //   continue;
-    //
+    // if to be added but can't be matched no sense in putting to wait queue
     if (orderactinfo.action == Actions::Actions::Add) {
-      if (!PreProcessor::canMatchOrder(orderactinfo.orderID))
+      if (!PreProcessor::canInsertOrderIntoOrderbook(orderactinfo.orderID))
         continue;
     }
-    m_waitQueue.push(orderactinfo);
-    insertedinWaitQueue.push_back(orderactinfo);
+    EmptyOrderIntoOrderbook(orderactinfo);
+    // std::cout << "---------------------------------------------------------"
+    //           << std::endl;
+    // std::cout << "observing " << orderactinfo.orderID << " "
+    //           << getType(orderactinfo.orderType) << " " <<
+    //           orderactinfo.action
+    //           << std::endl;
+    // std::cout << "---------------------------------------------------------"
+    //           << std::endl;
   }
-
-  // clear these orders no longer in preprocessor but in wait queue
-  for (auto &orderactinfo : insertedinWaitQueue) {
-    auto it = typeRankedOrders.find(orderactinfo);
-    if (it == typeRankedOrders.end())
-      continue;
-    typeRankedOrders.erase(orderactinfo);
-  }
+  // for (int i = 0; i < (int)m_laterProcessOrders.size(); i++) {
+  //   std::cout << "QUEUE TYPE: " << getType(m_rankType[i]) << std::endl;
+  //   for (const auto &x : m_laterProcessOrders.at(i)) {
+  //     std::cout << "later process: " << x.orderID << " " <<
+  //     getType(x.orderType)
+  //               << " " << x.action << std::endl;
+  //   }
+  // }
+  // std::cout << "-------------------" << std::endl;
 }
-
-void PreProcessor::EmptyWaitQueue() {
+void PreProcessor::EmptyOrderIntoOrderbook(const OrderActionInfo &ordactinfo) {
   // manual override for experimentation purpose
   // since today (Jun 14 Saturday) market is closed
   // test: successful
 
   if (!PreProcessor::canTrade()) { // can't send into orderbook if closed
-    // std::cout << "Market Closed :(" << std::endl;
+    std::cout << "Market Closed :(" << std::endl;
     return;
   }
-  while (!m_waitQueue.empty()) {
-    OrderActionInfo orderactinfo = m_waitQueue.front();
-    auto &[orderID, type, action] = orderactinfo;
-    m_waitQueue.pop();
-    assert(action != Actions::Actions::Modify);
 
-    // forward to orderbook for relevant operation
-    if (action == Actions::Actions::Add &&
-        m_orderComposition.count(orderID) > 0)
-      m_orderbookPtr->AddOrder(*m_orderComposition[orderID]);
-    else
-      m_orderbookPtr->CancelOrder(orderID);
+  auto &[orderID, type, action] = ordactinfo;
+  assert(action != Actions::Actions::Modify);
 
-    // change status from to be processed later since added into orderbook
-    m_laterProcessOrders.at(m_typeRank[type]).erase(orderactinfo);
-  }
+  // forward to orderbook for relevant operation
+  if (action == Actions::Actions::Add && m_orderComposition.count(orderID) > 0)
+    m_orderbookPtr->AddOrder(*m_orderComposition[orderID]);
+  else
+    m_orderbookPtr->CancelOrder(orderID);
+
+  // change status from to be processed later since added into orderbook
+  m_laterProcessOrders.at(m_typeRank[type]).erase(ordactinfo);
+
   PreProcessor::ClearSeenOrdersWhenMatched();
 }
 
@@ -344,8 +348,8 @@ void PreProcessor::ClearSeenOrdersWhenMatched() {
     OrderID askId = trade.getMatchedAsk().orderID;
     OrderID orderId = ((m_isBidPreprocessor == true) ? bidId : askId);
 
-    // trade cannot happen on the basis of a cancel order hence it must be add
-    // stop once an trade has been encountered and cleared previously
+    // trade cannot happen on the basis of a cancel order hence it must be
+    // add stop once an trade has been encountered and cleared previously
 
     if (m_orderComposition.count(orderId) > 0 &&
         m_orderComposition[orderId]->getRemainingQuantity() == 0) {
@@ -388,7 +392,7 @@ Quantity qtyAvailableForMatch(const OrderPointer &orderptr,
   return qtyAvailable;
 }
 
-bool PreProcessor::canMatchOrder(const OrderID &orderID) {
+bool PreProcessor::canInsertOrderIntoOrderbook(const OrderID &orderID) {
   // action is add by default
   if (m_orderComposition.count(orderID) == 0)
     return false;
@@ -444,7 +448,7 @@ bool PreProcessor::canMatchOrder(const OrderID &orderID) {
 // check if the market is open currently (between 9:15 to 15:30)
 bool PreProcessor::canTrade() {
   using namespace std::chrono;
-  auto now = system_clock::now();
+  auto now = system_clock::now() + hours(5) + minutes(30); // UTC to IST
 
   // Check if weekend
   auto today = floor<days>(now);
@@ -555,8 +559,6 @@ void PreProcessor::setMaxPendingDuration(std::chrono::milliseconds threshold) {
   MAX_PENDING_DURATION = threshold;
 }
 
-std::size_t PreProcessor::getWaitQueueSize() { return m_waitQueue.size(); }
-
 /*
 ////////////////////////////////////////////////
 Printing Debugging UTILITIES
@@ -586,25 +588,6 @@ void PreProcessor::printPreProcessorStatus() {
                        orderID)
                 << std::endl;
     }
-  }
-
-  std::cout << "WAIT QUEUES" << std::endl;
-  std::cout << "size: " << m_waitQueue.size() << std::endl;
-
-  // print all the orders left in waitQueue
-  auto copyOfWaitQueue = m_waitQueue;
-  while (!copyOfWaitQueue.empty()) {
-    auto [orderID, _, action] = copyOfWaitQueue.front();
-    std::cout << "action: "
-              << ((action == Actions::Actions::Add)
-                      ? "ADD"
-                      : ((action == Actions::Actions::Cancel) ? "CANCEL"
-                                                              : "MODIFY"))
-              << " price: "
-              << PreProcessor::OrderActionInfo::decodePriceFromOrderID(orderID)
-              << std::endl;
-
-    copyOfWaitQueue.pop();
   }
 }
 /*
