@@ -3,6 +3,7 @@
 #include "utils/alias/Fundamental.hpp"
 #include "utils/enums/OrderStatus.hpp"
 
+#include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <ctime>
@@ -11,21 +12,24 @@
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
+#include <format>
 
 const int PRICE_MULTIPLIER = 100;
 
-std::string
-Order::returnReadableTime(const std::chrono::system_clock::time_point &tt) {
-  std::time_t tamatch = std::chrono::system_clock::to_time_t(tt);
-  std::tm *ptamatch = std::localtime(&tamatch); // local time conversion
-
-  std::stringstream ss;
-  ss << std::put_time(ptamatch, "%d-%m-%Y %H:%M:%S");
-  std::string ans = ss.str();
-  return ans;
+TimeStamp Order::getGMTTime()
+{
+  TimeStamp now = std::chrono::system_clock::now(); // returns GMT
+  return now;
 }
 
-void Order::printTimeInfo() const {
+std::string
+Order::returnReadableTime(const std::chrono::system_clock::time_point &tt)
+{
+  return std::format("{:%d-%m-%Y %H:%M:%S}", std::chrono::floor<std::chrono::seconds>(tt));
+}
+
+void Order::printTimeInfo() const
+{
   std::cout << "activate: " << returnReadableTime(m_activateTime)
             << " deactivate: " << returnReadableTime(m_deactivateTime)
             << std::endl;
@@ -38,64 +42,59 @@ Order::Order(const Symbol symbol, const OrderType::OrderType orderType,
              const std::string &deactivationTime)
     : m_symbol{symbol}, m_orderType{orderType}, m_side{side},
       m_price{static_cast<int>(price * PRICE_MULTIPLIER)},
-      m_remQuantity{quantity}, m_participantID{participantID} {
+      m_remQuantity{quantity}, m_participantID{participantID}
+{
 
   // static_cast: purely compile time explicit inbuilt/custom cast operator
   // no runtime check -> typecast to parent class, but access child method
   // above problematic -> solution: dynamic_cast
   // keep sure all values are in int to avoid round off, precision errors etc
   m_orderStatus = OrderStatus::OrderStatus::NotProcessed;
-  m_timestamp = std::chrono::system_clock::now(); // time_point
   m_orderID =
       Order::encodeOrderID(m_timestamp, m_price, m_side == Side::Side::Buy);
 
   // expect time in dd-mm-yyyy hh:mm:ss format
-  m_activateTime =
-      ((activationTime == "") ? m_timestamp
-                              : convertDateTimeToTimeStamp(activationTime));
-  m_deactivateTime =
-      ((deactivationTime == "") ? Constants::EndOfTime
-                                : convertDateTimeToTimeStamp(deactivationTime));
+  m_activateTime = ((activationTime == "" || activationTime == "NOW")
+                        ? getGMTTime()
+                        : convertDateTimeToTimeStamp(activationTime));
 
-  // market orders ensure execution at prevailing price
-  // if (orderType == OrderType::OrderType::Market ||
-  //     orderType == OrderType::OrderType::MarketOnOpen ||
-  //     orderType == OrderType::OrderType::MarketOnClose) {
-  //   m_price = Constants::InvalidPrice;
-  // }
+  m_deactivateTime = ((deactivationTime == "" || deactivationTime == "EOT")
+                          ? Constants::EndOfTime
+                          : convertDateTimeToTimeStamp(deactivationTime));
+  // std::cout << "activate time: " << returnReadableTime(m_activateTime) << " deactivate time: " << returnReadableTime(m_deactivateTime) << " end of time: " << returnReadableTime(Constants::EndOfTime) << std::endl;
 }
 
-TimeStamp Order::convertDateTimeToTimeStamp(const std::string &dateTime) {
-  // istringstream: input . -> string to buffer (cin/cout like)
-  // stops when whitespace/fails
-  std::istringstream ss(dateTime);
+TimeStamp Order::convertDateTimeToTimeStamp(const std::string &dateTime)
+{
+  // dateTime is in local time
+  assert(!dateTime.empty() || dateTime != "NOW" || dateTime != "EOT");
 
-  // 24 hr format, 0-11 months, 2024->124 aka (2024-1900)
+  std::istringstream ss(dateTime); // string as buffer (terminate: white space/fail)
+
   // https://cplusplus.com/reference/ctime/tm/
-  std::tm time = {}; // always init fully (earlier garbage value of 13)
-  // parses string in given datetime fmt (opt to std::tm obj)
-  ss >> std::get_time(&time, "%d-%m-%Y %H:%M:%S");
+  std::tm time{}; // init to avoid garbage values
+
+  ss >> std::get_time(&time, "%d-%m-%Y %H:%M:%S"); // dateTime format fixed
   if (ss.fail())
     throw std::runtime_error("Time could NOT be parsed");
 
-  // cause of sparring execution (13 somehow)
   time.tm_isdst = -1; // let sys decide if daylight saving applicable
-  // std::cout << "Parsed tm: "
-  //           << "Day=" << time.tm_mday << ", "
-  //           << "Month=" << time.tm_mon + 1 << ", "
-  //           << "Year=" << time.tm_year + 1900 << ", "
-  //           << "Hour=" << time.tm_hour << ", "
-  //           << "Min=" << time.tm_min << ", "
-  //           << "Sec=" << time.tm_sec << ", "
-  //           << "DST: " << time.tm_isdst << std::endl;
+                      // std::cout << "Parsed local tm: "
+                      //           << "Day=" << time.tm_mday << ", "
+                      //           << "Month=" << time.tm_mon + 1 << ", "
+                      //           << "Year=" << time.tm_year + 1900 << ", "
+                      //           << "Hour=" << time.tm_hour << ", "
+                      //           << "Min=" << time.tm_min << ", "
+                      //           << "Sec=" << time.tm_sec << ", "
+                      //           << "DST: " << time.tm_isdst << std::endl;
 
-  // returns no of secs from UNIX epoch (32 bit) -> 2038 till
+  // returns UNIX time (#secs from Jan 1, 1970)
   // TODO: check out and integrate __time64_t
-  std::time_t tt = std::mktime(&time); // 0 param: current
+  std::time_t tt = std::mktime(&time); // interprets as local time
+  // std::time_t tt = timegm(&time); // interprets as GMT time
   if (tt == -1)
     throw std::runtime_error("Failed to convert time to time_t");
 
-  // Convert std::time_t -> std::chrono::system_clock::time_point
   return std::chrono::system_clock::from_time_t(tt);
 }
 
@@ -108,7 +107,8 @@ Order::Order(const Order &other)
       m_deactivateTime{other.getDeactivationTime()},
       m_orderStatus{other.getOrderStatus()} {}
 
-OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid) {
+OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid)
+{
 
   // https://stackoverflow.com/a/31553641
   // steady_clock: stopwatch, system_clock: timestamp
@@ -130,16 +130,18 @@ OrderID Order::encodeOrderID(TimeStamp time, Price intPrice, bool isBid) {
   id |= ((static_cast<OrderID>(intPrice)) << 1);
   id |= ((isBid) ? static_cast<OrderID>(1) : static_cast<OrderID>(0));
   return id;
-  // return ((timestamp << 31) | (intPrice << 1) | isBid);
 }
-void Order::FillPartially(Quantity quantity) {
+void Order::FillPartially(Quantity quantity)
+{
   assert(quantity <= m_remQuantity);
   m_remQuantity -= quantity;
 }
 
 // price-time priority algorithm (rank orders for matching)
-bool Order::operator<(const Order &other) const {
-  if (m_side == other.getSide()) {
+bool Order::operator<(const Order &other) const
+{
+  if (m_side == other.getSide())
+  {
     if (m_side == Side::Side::Buy && m_price != other.getPrice())
       return m_price > other.getPrice();
     else if (m_side == Side::Side::Sell && m_price != other.getPrice())
@@ -151,7 +153,8 @@ bool Order::operator<(const Order &other) const {
   return m_remQuantity > other.getRemainingQuantity();
 }
 
-bool Order::operator==(const Order &other) const {
+bool Order::operator==(const Order &other) const
+{
   return m_symbol == other.m_symbol && m_orderType == other.m_orderType &&
          m_side == other.m_side && m_price == other.m_price &&
          m_remQuantity == other.m_remQuantity &&

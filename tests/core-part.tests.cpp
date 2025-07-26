@@ -7,7 +7,8 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-TEST(Participant, SetUpCheck) {
+TEST(Participant, SetUpCheck)
+{
   Xchange &xchange = Xchange::getInstance(3, 1000);
   ParticipantID partId = xchange.addParticipant("NUBE");
   const ParticipantPointer part = xchange.getParticipantInfo(partId);
@@ -26,16 +27,16 @@ void verifyAddOrderInformation(const ParticipantPointer &partPtr,
                                const std::string &activationTime,
                                const std::string &deactivationTime);
 
-TEST(Participant, AddOrderRecorded) {
+TEST(Participant, AddOrderRecorded)
+{
   Xchange &xchange = Xchange::getInstance(3, 1000);
   ParticipantID partId = xchange.addParticipant("NUME");
 
   const std::string symbol = "SPY";
   xchange.tradeNewSymbol(symbol);
-  std::optional<OrderID> orderId =
-      xchange.placeOrder(partId, Actions::Actions::Add, std::nullopt, symbol,
-                         Side::Side::Buy, OrderType::OrderType::Market, 124.32,
-                         4, "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+  std::optional<OrderID> orderId = xchange.placeOrder(
+      partId, Actions::Actions::Add, std::nullopt, symbol, Side::Side::Buy,
+      OrderType::OrderType::Market, 124.32, 4, "01-07-2025 19:12:27", "EOT");
   ASSERT_EQ(orderId.has_value(), true);
   const ParticipantPointer part = xchange.getParticipantInfo(partId);
   ASSERT_EQ(part->getNumberOfOrdersPlaced(), 1);
@@ -44,24 +45,23 @@ TEST(Participant, AddOrderRecorded) {
   verifyAddOrderInformation(xchange.getParticipantInfo(partId), orderId.value(),
                             symbol, Side::Side::Buy,
                             OrderType::OrderType::Market, 124.32, 4,
-                            "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+                            "01-07-2025 19:12:27", "EOT");
   Xchange::destroyInstance();
 }
 
-TEST(Participant, CancelOrderCleared) {
+TEST(Participant, CancelOrderCleared)
+{
   Xchange &xchange = Xchange::getInstance(30, 100000000);
   ParticipantID partId = xchange.addParticipant("NUME");
   const std::string symbol1 = "SPY";
   xchange.tradeNewSymbol(symbol1);
   std::optional<OrderID> orderId1 = xchange.placeOrder(
       partId, Actions::Actions::Add, std::nullopt, symbol1, Side::Side::Sell,
-      OrderType::OrderType::AllOrNone, 4.97, 43, "09-07-2025 19:12:27",
-      "01-01-2100 00:00:00");
+      OrderType::OrderType::AllOrNone, 4.97, 43, "09-07-2025 19:12:27", "EOT");
 
-  std::optional<OrderID> orderId2 =
-      xchange.placeOrder(partId, Actions::Actions::Add, std::nullopt, symbol1,
-                         Side::Side::Buy, OrderType::OrderType::Market, 124.32,
-                         4, "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+  std::optional<OrderID> orderId2 = xchange.placeOrder(
+      partId, Actions::Actions::Add, std::nullopt, symbol1, Side::Side::Buy,
+      OrderType::OrderType::Market, 124.32, 4, "01-07-2025 19:12:27", "EOT");
 
   xchange.placeOrder(partId, Actions::Actions::Cancel, orderId1.value(),
                      symbol1, Side::Side::Sell, OrderType::OrderType::AllOrNone,
@@ -70,7 +70,7 @@ TEST(Participant, CancelOrderCleared) {
   verifyAddOrderInformation(xchange.getParticipantInfo(partId),
                             orderId2.value(), symbol1, Side::Side::Buy,
                             OrderType::OrderType::Market, 124.32, 4,
-                            "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+                            "01-07-2025 19:12:27", "EOT");
 
   ASSERT_NE(xchange.getParticipantInfo(partId), nullptr);
   ASSERT_EQ(
@@ -80,25 +80,25 @@ TEST(Participant, CancelOrderCleared) {
   Xchange::destroyInstance();
 }
 
-TEST(Participant, ModifyOrderRecorded) {
+TEST(Participant, ModifyOrderRecorded)
+{
   Xchange &xchange = Xchange::getInstance(30, 1000000);
   ParticipantID partId1 = xchange.addParticipant("ID1");
   const std::string symbol1 = "SPY";
   xchange.tradeNewSymbol(symbol1);
-  std::optional<OrderID> orderId1 =
-      xchange.placeOrder(partId1, Actions::Actions::Add, std::nullopt, symbol1,
-                         Side::Side::Buy, OrderType::OrderType::Market, 124.32,
-                         4, "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+  std::optional<OrderID> orderId1 = xchange.placeOrder(
+      partId1, Actions::Actions::Add, std::nullopt, symbol1, Side::Side::Buy,
+      OrderType::OrderType::Market, 124.32, 4, "01-07-2025 19:12:27", "EOT");
 
   verifyAddOrderInformation(xchange.getParticipantInfo(partId1),
                             orderId1.value(), symbol1, Side::Side::Buy,
                             OrderType::OrderType::Market, 124.32, 4,
-                            "01-07-2025 19:12:27", "01-01-2100 00:00:00");
+                            "01-07-2025 19:12:27", "EOT");
 
-  std::optional<OrderID> orderId2 = xchange.placeOrder(
-      partId1, Actions::Actions::Modify, orderId1.value(), symbol1,
-      Side::Side::Buy, OrderType::OrderType::Market, 4.97, 43,
-      "09-07-2025 19:12:27", "01-01-2100 00:00:00");
+  std::optional<OrderID> orderId2 =
+      xchange.placeOrder(partId1, Actions::Actions::Modify, orderId1.value(),
+                         symbol1, Side::Side::Buy, OrderType::OrderType::Market,
+                         4.97, 43, "09-07-2025 19:12:27", "EOT");
 
   ASSERT_EQ(
       xchange.getParticipantInfo(partId1)->isParticularOrderPlacedByParticipant(
@@ -112,11 +112,12 @@ TEST(Participant, ModifyOrderRecorded) {
   verifyAddOrderInformation(xchange.getParticipantInfo(partId1),
                             orderId2.value(), symbol1, Side::Side::Buy,
                             OrderType::OrderType::Market, 4.97, 43,
-                            "09-07-2025 19:12:27", "01-01-2100 00:00:00");
+                            "09-07-2025 19:12:27", "EOT");
   Xchange::destroyInstance();
 }
 
-TEST(Participant, RecordExecutedTrades) {
+TEST(Participant, RecordExecutedTrades)
+{
   Xchange &xchange = Xchange::getInstance(3, 100);
   ParticipantID partId1 = xchange.addParticipant("ID1");
   // mock functionality of xchange returning trades
@@ -157,7 +158,8 @@ void verifyAddOrderInformation(const ParticipantPointer &partPtr,
                                const OrderType::OrderType &otype,
                                const double &price, const Quantity &qty,
                                const std::string &activationTime,
-                               const std::string &deactivationTime) {
+                               const std::string &deactivationTime)
+{
 
   const OrderPointer orderptr = partPtr->getOrder(orderId);
   ASSERT_NE(orderptr, nullptr);
@@ -168,12 +170,25 @@ void verifyAddOrderInformation(const ParticipantPointer &partPtr,
   ASSERT_EQ(orderptr->getSide(), side);
   ASSERT_EQ(static_cast<double>(orderptr->getPrice()) / 100, price);
   ASSERT_EQ(orderptr->getRemainingQuantity(), qty);
-  ASSERT_EQ(Order::returnReadableTime(orderptr->getActivationTime()),
-            activationTime);
-  ASSERT_EQ(Order::returnReadableTime(orderptr->getDeactivationTime()),
-            deactivationTime);
+
+  if (!activationTime.empty() && activationTime != "NOW")
+  {
+    ASSERT_EQ(partPtr->printParticipantLocalTime(orderptr->getActivationTime()), activationTime);
+  }
+  if (!deactivationTime.empty() && deactivationTime != "EOT")
+  {
+    ASSERT_EQ(partPtr->printParticipantLocalTime(orderptr->getDeactivationTime()), deactivationTime);
+  }
+  else
+  {
+    ASSERT_EQ(Order::returnReadableTime(orderptr->getDeactivationTime()),
+              "01-01-2100 00:00:00");
+  }
+  // ASSERT_EQ(Order::returnReadableTime(orderptr->getActivationTime()),
+  //           activationTime);
 }
-int main() {
+int main()
+{
   testing::InitGoogleTest();
   return RUN_ALL_TESTS();
 }

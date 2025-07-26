@@ -20,14 +20,21 @@
 #include <unordered_set>
 #include <vector>
 
-class PreProcessor {
+class PreProcessor
+{
 public:
-  PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreprocessor);
   PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreprocessor,
                std::size_t pendingOrderThreshold,
-               std::chrono::milliseconds pendingDurationThreshold);
+               std::chrono::milliseconds pendingDurationThreshold,
+               const std::string &localTimeZone, const TimeTuple &timeTuple);
 
-  struct OrderActionInfo {
+  PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreprocessor);
+  PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreProcessor, std::size_t pendingOrderThreshold,
+               std::chrono::milliseconds pendingDurationThreshold);
+  PreProcessor(OrderBookPointer &orderbookPtr, bool isBidPreProcessor, const std::string &localTimeZone, const TimeTuple &timeTuple);
+
+  struct OrderActionInfo
+  {
     OrderID orderID;
     OrderType::OrderType orderType;
     Actions::Actions action;
@@ -49,6 +56,8 @@ public:
   std::chrono::milliseconds getMaxPendingDuration() const;
   void setMaxPendingDuration(std::chrono::milliseconds duration);
 
+  const std::string &getTimeZone() const;
+
   std::string getType(OrderType::OrderType type);
   void printPreProcessorStatus();
 
@@ -58,6 +67,8 @@ public:
   void InsertIntoPreprocessing(const OrderActionInfo &orderactinfo);
   void InsertIntoPreprocessing(const OrderPointer &orderptr,
                                Actions::Actions action);
+
+  void UpdateTimeAttributesAccToOrderType(const OrderPointer &orderptr);
 
   bool hasOrderEnteredOrderbook(const OrderID &orderID,
                                 const OrderType::OrderType &otype);
@@ -80,6 +91,8 @@ public:
   bool hasOrderBeenEncountered(const OrderID &orderID);
   std::optional<OrderActionInfo> getOrderInfo(const OrderID &orderID);
   OrderPointer getOrder(const OrderID &orderID);
+
+  static TimeStamp getLocalTime();
 
 private:
   // m_typeRank determines index in vector (uniformity)
@@ -105,23 +118,25 @@ private:
           {5u, 11u, 2025},  // Guru Nanak Jayanti
           {25u, 12u, 2025}  // Christmas
       }};
-  static bool isHoliday(const TimeStamp &time);
-  static bool canTrade();
+  bool isHoliday(const TimeStamp &time);
+  bool canTrade();
 
-  static TimeStamp getNextMarketTime(bool isOpen);
-  static TimeStamp getNextOpenTime() { return getNextMarketTime(true); }
-  static TimeStamp getNextCloseTime() { return getNextMarketTime(false); }
+  TimeStamp getNextMarketTime(bool isOpen);
+  TimeStamp getNextOpenTime() { return getNextMarketTime(true); }
+  TimeStamp getNextCloseTime() { return getNextMarketTime(false); }
 
   // configurable
-  std::size_t MAX_PENDING_ORDERS_THRESHOLD;
-  std::chrono::milliseconds MAX_PENDING_DURATION;
+  std::shared_ptr<OrderBook> m_orderbookPtr;
+  bool m_isBidPreprocessor;
+  std::size_t m_MAX_PENDING_ORDERS_THRESHOLD;
+  std::chrono::milliseconds m_MAX_PENDING_DURATION;
+  std::string localTimeZone;
+  TimeTuple openCloseTime;
 
   // OrderBook as attribute as orderbook is unique for all prepro of same symbol
   // shared_ptr orderbook is shared across all prepro instances (bids, asks)
   // OrderBook ptr removed once all preprocessors removed
   // independence across symbols will also be maintained
-  std::shared_ptr<OrderBook> m_orderbookPtr;
-  bool m_isBidPreprocessor;
   std::vector<std::set<OrderActionInfo>> m_laterProcessOrders;
   std::chrono::system_clock::time_point m_lastFlushTime;
 

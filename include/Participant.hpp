@@ -10,9 +10,11 @@
 #include <unordered_map>
 #include <vector>
 
-class Participant {
+class Participant
+{
 private:
-  struct ParticipantOrderInfo {
+  struct ParticipantOrderInfo
+  {
     OrderID orderID;
     Actions::Actions action;
     Symbol symbol;
@@ -30,6 +32,7 @@ private:
 
   ParticipantID m_participantID;
   Portfolio m_portfolio;
+  std::string localTimeZone;
 
   std::unordered_map<OrderID, OrderPointer> m_orderComposition;
   std::unordered_map<OrderID, ParticipantOrderInfo> m_placedOrders;
@@ -37,7 +40,8 @@ private:
   std::vector<Trade> m_historyOfTrades;
 
 public:
-  Participant() = default;
+  Participant(const std::string &localTimeZoneOfParticipant);
+  Participant();
 
   OrderPointer recordNonCancelOrder(const Actions::Actions action,
                                     const Symbol &symbol,
@@ -54,6 +58,7 @@ public:
   void updatePortfolio(const Side::Side &side, const Trade &trade);
   void updateOrderStatus(const OrderID &matchedID);
 
+  std::string printParticipantLocalTime(const TimeStamp &tp);
   // const member functions can only be called by const participant objects
   ParticipantID getParticipantID() const;
 

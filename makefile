@@ -33,7 +33,7 @@ SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES)) # future obj fs
 # alternative: $(SRC_FILES:%.c=%.o), $(SRC_FILES:.c=.o)
 # OBJ_FILES = $(OBJ_DIR)/$(wildcard $(OBJ_DIR)/*.o) -> wrong
-	# wildcard issue: .o don't exist yet (direct match)
+# wildcard issue: .o don't exist yet (direct match)
 
 # execution
 TARGET_EXECUTABLE := $(BIN_DIR)/orderbook

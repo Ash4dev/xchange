@@ -19,7 +19,8 @@
 // drawbacks: global (static), not customizable initialization
 // static is hell of a keyword (internal linkage, static duration, class prop)
 
-class Xchange {
+class Xchange
+{
 private:
   std::unordered_set<std::string> m_govIDs;
   std::unordered_map<ParticipantID, ParticipantPointer> m_participants;
@@ -27,12 +28,16 @@ private:
 
   std::unordered_map<Symbol, SymbolInfoPointer> m_symbolInfos;
 
-  std::size_t MAX_PENDING_ORDERS_THRESHOLD;
-  std::chrono::milliseconds MAX_PENDING_DURATION;
+  std::size_t m_MAX_PENDING_ORDERS_THRESHOLD;
+  std::chrono::milliseconds m_MAX_PENDING_DURATION;
+  std::string localTimeZone;
 
   static std::unique_ptr<Xchange>
       m_instance; // must initialize outside class in main
   // private constructor
+  Xchange(std::size_t pendingThreshold,
+          std::chrono::milliseconds pendingDuration,
+          const std::string &localTimeZone);
   Xchange(std::size_t pendingThreshold,
           std::chrono::milliseconds pendingDuration);
 
@@ -40,6 +45,7 @@ public:
   Xchange(const Xchange &) = delete;            // copy-constructor
   Xchange &operator=(const Xchange &) = delete; // copy-assignment
 
+  static Xchange &getInstance(int pendingThreshold, int pendingDuration, const std::string &localTimeZone);
   static Xchange &getInstance(int pendingThreshold, int pendingDuration);
   static void destroyInstance();
 
@@ -74,8 +80,11 @@ public:
 
   std::size_t getOrderThreshold() const;
   std::uint64_t getDurationThreshold() const;
+  const std::string &getTimeZone() const;
 
   bool isGovIDPresent(const std::string &govId) const;
   bool isParticipantIDPresent(const std::string &partId) const;
   bool isSymbolTraded(const std::string &symbol) const;
+
+  static const std::unordered_map<std::string, TimeTuple> tradingHoursGMT;
 };

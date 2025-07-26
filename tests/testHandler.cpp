@@ -21,40 +21,58 @@ std::string trimDataString(const std::string &line);
 //// CORE TEST HANDLING FUNCTIONALITY////
 ////////////////////////////////////////
 
-void TestHandler::parseTestFile(const std::string &testFilePath) {
+void TestHandler::parseTestFile(const std::string &testFilePath)
+{
   std::ifstream testFile(testFilePath); // string_view fails
-  while (!testFile.is_open()) {
+  while (!testFile.is_open())
+  {
     throw std::runtime_error("Cannot open file: " + testFilePath);
     return;
   }
 
   std::string line;
-  while (std::getline(testFile, line)) {
+  while (std::getline(testFile, line))
+  {
     if (line.length() > 0 && line[0] == '-')
       line = trimNonDataString(line);
 
-    if (line.find("PendingOrderThreshold") != std::string::npos) {
+    if (line.find("PendingOrderThreshold") != std::string::npos)
+    {
       auto pos = line.find(":");
-      if (pos != std::string::npos) {
+      if (pos != std::string::npos)
+      {
         m_MAX_PENDING_ORDER_THRESHOLD =
             static_cast<std::size_t>(std::stoull(line.substr(pos + 2)));
       }
-    } else if (line.find("PendingDurationThreshold") != std::string::npos) {
+    }
+    else if (line.find("PendingDurationThreshold") != std::string::npos)
+    {
       auto pos = line.find(":");
-      if (pos != std::string::npos) {
-        m_MAX_PENDING_DURATION_THRESHOLD =
+      if (pos != std::string::npos)
+      {
+        m_m_MAX_PENDING_DURATION_THRESHOLD =
             static_cast<std::chrono::milliseconds>(
                 std::stoull(line.substr(pos + 2)));
       }
-    } else if (line.find("INCOMING ORDERS") != std::string::npos) {
+    }
+    else if (line.find("INCOMING ORDERS") != std::string::npos)
+    {
       parseUpdate(testFile);
-    } else if (line.find("PREPROCESSOR") != std::string::npos) {
+    }
+    else if (line.find("PREPROCESSOR") != std::string::npos)
+    {
       parsePreprocessorResults(testFile);
-    } else if (line.find("ORDERBOOK") != std::string::npos) {
+    }
+    else if (line.find("ORDERBOOK") != std::string::npos)
+    {
       parseOrderbookResults(testFile);
-    } else if (line.find("TRADES") != std::string::npos) {
+    }
+    else if (line.find("TRADES") != std::string::npos)
+    {
       parseTradeResults(testFile);
-    } else {
+    }
+    else
+    {
       continue;
     }
   }
@@ -70,14 +88,17 @@ void TestHandler::parseTestFile(const std::string &testFilePath) {
 //   return true;
 // }
 
-std::size_t TestHandler::getPreProcessorArgs() {
+std::size_t TestHandler::getPreProcessorArgs()
+{
   return m_MAX_PENDING_ORDER_THRESHOLD;
 }
 std::vector<Update> TestHandler::getUpdates() { return m_finalUpdates; }
-std::vector<PreProcessorResult> TestHandler::getPreProcessorResults() {
+std::vector<PreProcessorResult> TestHandler::getPreProcessorResults()
+{
   return m_preResults;
 }
-std::vector<OrderBookResult> TestHandler::getOrderBookResults() {
+std::vector<OrderBookResult> TestHandler::getOrderBookResults()
+{
   return m_obResults;
 }
 std::vector<TradeResult> TestHandler::getTradesResults() { return m_trResults; }
@@ -86,14 +107,18 @@ std::vector<TradeResult> TestHandler::getTradesResults() { return m_trResults; }
 //// TESTHELPER FUNCTIONS FOR PARSING //
 ////////////////////////////////////////
 
-void TestHandler::parseUpdate(std::ifstream &testFile) {
+void TestHandler::parseUpdate(std::ifstream &testFile)
+{
   std::string line;
-  while (std::getline(testFile, line)) {
-    if (line.length() > 0 && line[0] == '-') {
+  while (std::getline(testFile, line))
+  {
+    if (line.length() > 0 && line[0] == '-')
+    {
       if (trimNonDataString(line).find("EXPECTED RESULT") != std::string::npos)
         return;
       continue;
-    } else if (containsNoDigits(line))
+    }
+    else if (containsNoDigits(line))
       continue;
     else
       line = trimDataString(line);
@@ -121,14 +146,18 @@ void TestHandler::parseUpdate(std::ifstream &testFile) {
   }
 }
 
-void TestHandler::parsePreprocessorResults(std::ifstream &testFile) {
+void TestHandler::parsePreprocessorResults(std::ifstream &testFile)
+{
   std::string line;
-  while (std::getline(testFile, line)) {
-    if (line.length() > 0 && line[0] == '-') {
+  while (std::getline(testFile, line))
+  {
+    if (line.length() > 0 && line[0] == '-')
+    {
       if (trimNonDataString(line).find("PREPROCESSOR END") != std::string::npos)
         return;
       continue;
-    } else if (containsNoDigits(line))
+    }
+    else if (containsNoDigits(line))
       continue;
     else
       line = trimDataString(line);
@@ -145,14 +174,18 @@ void TestHandler::parsePreprocessorResults(std::ifstream &testFile) {
   }
 }
 
-void TestHandler::parseOrderbookResults(std::ifstream &testFile) {
+void TestHandler::parseOrderbookResults(std::ifstream &testFile)
+{
   std::string line;
-  while (std::getline(testFile, line)) {
-    if (line.length() > 0 && line[0] == '-') {
+  while (std::getline(testFile, line))
+  {
+    if (line.length() > 0 && line[0] == '-')
+    {
       if (trimNonDataString(line).find("ORDERBOOK END") != std::string::npos)
         return;
       continue;
-    } else if (containsNoDigits(line))
+    }
+    else if (containsNoDigits(line))
       continue;
     else
       line = trimDataString(line);
@@ -168,14 +201,18 @@ void TestHandler::parseOrderbookResults(std::ifstream &testFile) {
   }
 }
 
-void TestHandler::parseTradeResults(std::ifstream &testFile) {
+void TestHandler::parseTradeResults(std::ifstream &testFile)
+{
   std::string line;
-  while (std::getline(testFile, line)) {
-    if (line.length() > 0 && line[0] == '-') {
+  while (std::getline(testFile, line))
+  {
+    if (line.length() > 0 && line[0] == '-')
+    {
       if (trimNonDataString(line).find("TRADES END") != std::string::npos)
         return;
       continue;
-    } else if (containsNoDigits(line))
+    }
+    else if (containsNoDigits(line))
       continue;
     else
       line = trimDataString(line);
@@ -195,30 +232,37 @@ void TestHandler::parseTradeResults(std::ifstream &testFile) {
 //// FREE HELPER FUNCTIONS FOR PARSING //
 ////////////////////////////////////////
 
-std::vector<std::string> splitString(const std::string &str, char delimiter) {
+std::vector<std::string> splitString(const std::string &str, char delimiter)
+{
   std::vector<std::string> tokens;
   std::istringstream iss(str); // Create an input string stream from the string
   std::string token;
 
   // Extract tokens using getline with the specified delimiter
-  while (std::getline(iss, token, delimiter)) {
+  while (std::getline(iss, token, delimiter))
+  {
     tokens.push_back(token);
   }
   return tokens;
 }
 
-std::string trimNonDataString(const std::string &input) {
+std::string trimNonDataString(const std::string &input)
+{
   std::string result = "";
-  for (char c : input) {
+  for (char c : input)
+  {
     if (c != '-')
       result += c;
   }
   return result;
 }
 
-bool containsNoDigits(const std::string &str) {
-  for (char ch : str) {
-    if (isdigit(ch)) {
+bool containsNoDigits(const std::string &str)
+{
+  for (char ch : str)
+  {
+    if (isdigit(ch))
+    {
       return false;
     }
   }
@@ -227,18 +271,24 @@ bool containsNoDigits(const std::string &str) {
 
 // trim down the data field of waste chars like " ", "\" etc
 // https://onlinegdb.com/6Rq1vatsZ
-std::string trimDataString(const std::string &input) {
+std::string trimDataString(const std::string &input)
+{
   std::string result = "";
   bool spaceFound = false;
   bool charFirstSeen = false;
 
-  for (char c : input) {
+  for (char c : input)
+  {
     if (c == '|')
       continue;
-    else if (std::isspace(static_cast<unsigned char>(c))) {
+    else if (std::isspace(static_cast<unsigned char>(c)))
+    {
       spaceFound = true;
-    } else {
-      if (spaceFound && charFirstSeen) {
+    }
+    else
+    {
+      if (spaceFound && charFirstSeen)
+      {
         result += ' ';
       }
       result += c;

@@ -10,15 +10,17 @@
 #include <string>
 #include <vector>
 
-struct PreProcessorArguments {
+struct PreProcessorArguments
+{
   std::size_t MAX_PENDING_ORDER_THRESHOLD;
-  std::chrono::milliseconds MAX_PENDING_DURATION_THRESHOLD;
+  std::chrono::milliseconds m_MAX_PENDING_DURATION_THRESHOLD;
 };
 
-class TestHandler {
+class TestHandler
+{
 private:
   std::size_t m_MAX_PENDING_ORDER_THRESHOLD;
-  std::chrono::milliseconds m_MAX_PENDING_DURATION_THRESHOLD;
+  std::chrono::milliseconds m_m_MAX_PENDING_DURATION_THRESHOLD;
   void parsePreprocessorArguments();
 
   std::vector<Update> m_finalUpdates;

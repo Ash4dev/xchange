@@ -7,20 +7,24 @@
 Level::Level(Symbol symbol, Price price, Quantity quantity)
     : m_symbol{symbol}, m_price{price}, m_quantity{quantity}, m_orderList{} {}
 
-TimeStamp Level::getActivationTime(const OrderID &orderID) {
+TimeStamp Level::getActivationTime(const OrderID &orderID)
+{
   OrderPointer orderptr = (m_info[orderID]).order;
   return orderptr->getActivationTime();
 }
 
-TimeStamp Level::getDeactivationTime(const OrderID &orderID) {
+TimeStamp Level::getDeactivationTime(const OrderID &orderID)
+{
   OrderPointer orderptr = (m_info[orderID]).order;
   return orderptr->getDeactivationTime();
 }
 
-void Level::AddOrder(Order &order) {
+void Level::AddOrder(Order &order)
+{
   assert(m_price == order.getPrice()); // ensure price matches
 
-  if (m_info.count(order.getOrderID()) > 0) { // avoid readdition of same order
+  if (m_info.count(order.getOrderID()) > 0)
+  { // avoid readdition of same order
     return;
   }
   m_quantity += order.getRemainingQuantity(); // add quantity to current level
@@ -44,9 +48,11 @@ void Level::AddOrder(Order &order) {
       OrderPointerInfo{currentOrderPointer, listEndIterator};
 }
 
-void Level::CancelOrder(OrderID orderID) {
+void Level::CancelOrder(OrderID orderID)
+{
   // cannot delete non-existing order in a level
-  if (m_info.count(orderID) == 0) {
+  if (m_info.count(orderID) == 0)
+  {
     // in case order is not found, then the cancel order remains NotProcessed
     // (no hope for it)
     return;
@@ -66,21 +72,25 @@ void Level::CancelOrder(OrderID orderID) {
   m_info.erase(orderID);                    // remove information of old order
 }
 
-void Level::ModifyOrder(OrderID oldOrderID, Order &ModifiedOrder) {
+void Level::ModifyOrder(OrderID oldOrderID, Order &ModifiedOrder)
+{
   CancelOrder(oldOrderID);
   AddOrder(ModifiedOrder);
 }
 
-void Level::UpdateLevelQuantityPostMatch(Quantity filledQuantity) {
+void Level::UpdateLevelQuantityPostMatch(Quantity filledQuantity)
+{
   m_quantity -= filledQuantity;
 }
 
 void Level::removeMatchedOrder(
-    OrderID orderID) { // orderID of the order executed fully (no volume left)
+    OrderID orderID)
+{ // orderID of the order executed fully (no volume left)
   // find the matched order
   std::unordered_map<OrderID, OrderPointerInfo>::iterator it =
       m_info.find(orderID);
-  if (it == m_info.end()) {
+  if (it == m_info.end())
+  {
     return; // ignore if already removed
   }
   m_orderList.erase(

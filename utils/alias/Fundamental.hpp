@@ -18,3 +18,5 @@ using ParticipantID = std::string;
 // net position can also be effectively negative (loss)
 using Amount = double;
 using Portfolio = std::unordered_map<Symbol, Amount>;
+
+using TimeTuple = std::tuple<std::chrono::minutes, std::chrono::minutes>;

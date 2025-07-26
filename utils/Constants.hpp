@@ -24,8 +24,9 @@ struct Constants {
     tm.tm_sec = 0;
     tm.tm_isdst = -1; // Let the system determine DST
 
-    // Convert std::tm to std::time_t
-    std::time_t tt = std::mktime(&tm);
+    // Convert std::tm to std::time_t (mktime interprets in local time)
+    // TODO: unix specific
+    std::time_t tt = timegm(&tm); 
 
     // Convert to std::chrono::system_clock::time_point
     return std::chrono::system_clock::from_time_t(tt);

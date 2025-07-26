@@ -55,6 +55,8 @@ public:
     m_orderStatus = newOrderStatus;
   }
 
+  static TimeStamp getGMTTime();
+
 private:
   Symbol m_symbol;
   OrderType::OrderType m_orderType;

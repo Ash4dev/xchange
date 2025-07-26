@@ -24,18 +24,27 @@
 
 std::unique_ptr<Xchange> Xchange::m_instance = nullptr;
 
-Xchange::Xchange(std::size_t pendingThreshold,
-                 std::chrono::milliseconds pendingDuration)
-    : MAX_PENDING_ORDERS_THRESHOLD{pendingThreshold},
-      MAX_PENDING_DURATION{pendingDuration} {};
+Xchange::Xchange(std::size_t orderThreshold, std::chrono::milliseconds durationThreshold, const std::string &localTimeZone) : m_MAX_PENDING_ORDERS_THRESHOLD{orderThreshold}, m_MAX_PENDING_DURATION{durationThreshold}, localTimeZone{localTimeZone} {}
 
-Xchange &Xchange::getInstance(int pendingThreshold, int pendingDuration) {
-  if (!m_instance) {
+Xchange::Xchange(std::size_t orderThreshold,
+                 std::chrono::milliseconds durationThreshold)
+    : Xchange::Xchange(orderThreshold, durationThreshold, "Asia/Kolkata") {}
+
+Xchange &Xchange::getInstance(int pendingThreshold, int pendingDuration, const std::string &localTimeZone)
+{
+  if (!m_instance && tradingHoursGMT.contains(localTimeZone))
+  {
     m_instance.reset(
         new Xchange(static_cast<std::size_t>(pendingThreshold),
-                    static_cast<std::chrono::milliseconds>(pendingDuration)));
+                    static_cast<std::chrono::milliseconds>(pendingDuration),
+                    localTimeZone));
   }
   return *m_instance;
+}
+
+Xchange &Xchange::getInstance(int pendingThreshold, int pendingDuration)
+{
+  return Xchange::getInstance(pendingThreshold, pendingDuration, "Asia/Kolkata");
 }
 
 // no need to use static here
@@ -46,7 +55,8 @@ void Xchange::destroyInstance() { m_instance.reset(nullptr); }
 ///////// PARTICIPANT FUNCTIONALITY /
 ////////////////////////////////////
 
-ParticipantID Xchange::generateParticipantID(const std::string &govId) {
+ParticipantID Xchange::generateParticipantID(const std::string &govId)
+{
   if (govID_partIDMap.count(govId) > 0)
     return govID_partIDMap.at(govId);
   std::size_t partCount = Xchange::getParticipantCount();
@@ -55,7 +65,8 @@ ParticipantID Xchange::generateParticipantID(const std::string &govId) {
   return partID;
 }
 
-ParticipantID Xchange::addParticipant(const std::string &govID) {
+ParticipantID Xchange::addParticipant(const std::string &govID)
+{
   if (m_govIDs.count(govID) > 0 && govID_partIDMap.count(govID) > 0)
     return govID_partIDMap.at(govID);
   m_govIDs.insert(govID);
@@ -67,7 +78,8 @@ ParticipantID Xchange::addParticipant(const std::string &govID) {
   return partID;
 }
 
-void Xchange::removeParticipant(const ParticipantID &participantID) {
+void Xchange::removeParticipant(const ParticipantID &participantID)
+{
   if (m_participants.count(participantID) == 0)
     return;
   // lot to learn about smart pointers
@@ -76,7 +88,8 @@ void Xchange::removeParticipant(const ParticipantID &participantID) {
   m_participants.erase(participantID); // what about ParticipantPointer will it
                                        // be cleared immeadiately?
   std::string partGovID = "";
-  for (auto it = participantID.rbegin(); it != participantID.rend(); it++) {
+  for (auto it = participantID.rbegin(); it != participantID.rend(); it++)
+  {
     char character = *it;
     if (character == '_')
       break;
@@ -97,7 +110,8 @@ std::optional<OrderID> Xchange::placeOrder(
     const std::optional<OrderType::OrderType> orderType,
     const std::optional<double> price, const std::optional<Quantity> quantity,
     const std::optional<std::string> &activationTime,
-    const std::optional<std::string> &deactivationTime) {
+    const std::optional<std::string> &deactivationTime)
+{
 
   if (m_participants.count(participantID) == 0)
     return std::nullopt; // participant must exist
@@ -114,7 +128,8 @@ std::optional<OrderID> Xchange::placeOrder(
        !activationTime.has_value() || !deactivationTime.has_value());
 
   // create the new order that will be created in this call
-  if (!canNOTplaceOrder) {
+  if (!canNOTplaceOrder)
+  {
     orderptr = m_participants[participantID]->recordNonCancelOrder(
         action, symbol.value(), orderType.value(), side.value(), price.value(),
         quantity.value(), participantID, activationTime.value(),
@@ -131,7 +146,8 @@ std::optional<OrderID> Xchange::placeOrder(
   if (prePtr == nullptr)
     return std::nullopt;
 
-  if (action == Actions::Actions::Add && orderptr != nullptr) {
+  if (action == Actions::Actions::Add && orderptr != nullptr)
+  {
     prePtr->InsertAddOrderIntoPreprocessing(orderptr);
     return orderptr->getOrderID();
   }
@@ -139,7 +155,8 @@ std::optional<OrderID> Xchange::placeOrder(
   auto const oldOrderInfo =
       m_participants.at(participantID)->getOrderInformation(oldOrderID.value());
   if (oldOrderInfo.side != side || oldOrderInfo.otype != orderType ||
-      oldOrderInfo.symbol != symbol) {
+      oldOrderInfo.symbol != symbol)
+  {
     throw std::logic_error("can NOT alter side, ordertype, symbol while "
                            "modifying a previous order");
     return std::nullopt;
@@ -154,7 +171,8 @@ std::optional<OrderID> Xchange::placeOrder(
   else
     std::cout << "WHY NOT FUCKING CANCEL RECORDED!" << std::endl;
 
-  if (action == Actions::Actions::Modify) {
+  if (action == Actions::Actions::Modify)
+  {
     if (orderptr == nullptr)
       return std::nullopt;
 
@@ -162,7 +180,8 @@ std::optional<OrderID> Xchange::placeOrder(
     return orderptr->getOrderID();
   }
 
-  if (action == Actions::Actions::Cancel) {
+  if (action == Actions::Actions::Cancel)
+  {
     prePtr->RemoveFromPreprocessing(oldOrderID.value(), orderType.value());
     return std::nullopt;
   }
@@ -173,28 +192,33 @@ std::optional<OrderID> Xchange::placeOrder(
 ///////// SYMBOL FUNCTIONALITY //////
 ////////////////////////////////////
 
-void Xchange::tradeNewSymbol(const std::string &SYMBOL) {
+void Xchange::tradeNewSymbol(const std::string &SYMBOL)
+{
   if (m_symbolInfos.count(SYMBOL) > 0)
     return;
   SymbolInfoPointer symPtr{std::make_shared<SymbolInfo>(
-      SYMBOL, MAX_PENDING_ORDERS_THRESHOLD, MAX_PENDING_DURATION)};
+      SYMBOL, m_MAX_PENDING_ORDERS_THRESHOLD, m_MAX_PENDING_DURATION, localTimeZone, Xchange::tradingHoursGMT.at(localTimeZone))};
+
   m_symbolInfos[SYMBOL] = symPtr;
 }
 
-void Xchange::retireOldSymbol(const std::string &SYMBOL) {
+void Xchange::retireOldSymbol(const std::string &SYMBOL)
+{
   if (m_symbolInfos.count(SYMBOL) == 0)
     return;
   m_symbolInfos.erase(SYMBOL);
 }
 
-OrderBookPointer Xchange::getOrderBook(const Symbol &SYMBOL) const {
+OrderBookPointer Xchange::getOrderBook(const Symbol &SYMBOL) const
+{
   if (m_symbolInfos.count(SYMBOL) == 0)
     return nullptr;
   return m_symbolInfos.at(SYMBOL)->m_orderbook;
 }
 
 PreProcessorPointer Xchange::getPreProcessor(const Symbol &SYMBOL,
-                                             const Side::Side &side) const {
+                                             const Side::Side &side) const
+{
   if (m_symbolInfos.count(SYMBOL) == 0)
     return nullptr;
   if (side == Side::Side::Buy)
@@ -203,48 +227,83 @@ PreProcessorPointer Xchange::getPreProcessor(const Symbol &SYMBOL,
     return m_symbolInfos.at(SYMBOL)->m_askprepro;
 }
 
-std::size_t Xchange::getOrderThreshold() const {
-  return MAX_PENDING_ORDERS_THRESHOLD;
+std::size_t Xchange::getOrderThreshold() const
+{
+  return m_MAX_PENDING_ORDERS_THRESHOLD;
 }
 
-std::uint64_t Xchange::getDurationThreshold() const {
-  return MAX_PENDING_DURATION.count();
+std::uint64_t Xchange::getDurationThreshold() const
+{
+  return m_MAX_PENDING_DURATION.count();
 }
 
-bool Xchange::isGovIDPresent(const std::string &govID) const {
+const std::string &Xchange::getTimeZone() const
+{
+  return localTimeZone;
+}
+
+bool Xchange::isGovIDPresent(const std::string &govID) const
+{
   return (m_govIDs.count(govID) > 0);
 }
 
-bool Xchange::canMapGovIDToParticipantID(const std::string &govID) const {
+bool Xchange::canMapGovIDToParticipantID(const std::string &govID) const
+{
   return (govID_partIDMap.count(govID) > 0);
 }
 
 ParticipantID
-Xchange::getParticipantIDFromGovID(const std::string &govID) const {
+Xchange::getParticipantIDFromGovID(const std::string &govID) const
+{
   if (govID_partIDMap.count(govID) == 0)
     return "";
   return govID_partIDMap.at(govID);
 }
 
-std::size_t Xchange::getParticipantCount() const {
+std::size_t Xchange::getParticipantCount() const
+{
   return m_participants.size();
 }
 
-bool Xchange::isParticipantIDPresent(const std::string &partID) const {
+bool Xchange::isParticipantIDPresent(const std::string &partID) const
+{
   return (m_participants.count(partID) > 0);
 }
 
 ParticipantPointer
-Xchange::getParticipantInfo(const std::string &partID) const {
+Xchange::getParticipantInfo(const std::string &partID) const
+{
   if (!isParticipantIDPresent(partID))
     return nullptr;
   return m_participants.at(partID);
 }
 
-std::size_t Xchange::getSymbolsTradedCount() const {
+std::size_t Xchange::getSymbolsTradedCount() const
+{
   return m_symbolInfos.size();
 }
 
-bool Xchange::isSymbolTraded(const std::string &symbol) const {
+bool Xchange::isSymbolTraded(const std::string &symbol) const
+{
   return (m_symbolInfos.count(symbol) > 0);
 }
+
+// https://www.cmcmarkets.com/en-gb/trading-guides/stock-market-trading-hours
+// https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#TORONTO
+const std::unordered_map<std::string, TimeTuple>
+    Xchange::tradingHoursGMT = {
+        {"Australia/Sydney", {std::chrono::hours(0) + std::chrono::minutes(0), std::chrono::hours(6) + std::chrono::minutes(0)}},     // ASX
+        {"Asia/Kolkata", {std::chrono::hours(3) + std::chrono::minutes(45), std::chrono::hours(10) + std::chrono::minutes(0)}},       // BSE
+        {"America/Sao_Paulo", {std::chrono::hours(13) + std::chrono::minutes(0), std::chrono::hours(20) + std::chrono::minutes(30)}}, // B3
+        {"Europe/Paris", {std::chrono::hours(8) + std::chrono::minutes(0), std::chrono::hours(16) + std::chrono::minutes(30)}},       // Euronext
+        {"Europe/Berlin", {std::chrono::hours(7) + std::chrono::minutes(0), std::chrono::hours(19) + std::chrono::minutes(0)}},       // FSX
+        {"Asia/Hong_Kong", {std::chrono::hours(1) + std::chrono::minutes(30), std::chrono::hours(8) + std::chrono::minutes(0)}},      // HKEX
+        {"Africa/Johannesburg", {std::chrono::hours(7) + std::chrono::minutes(0), std::chrono::hours(15) + std::chrono::minutes(0)}}, // JSE
+        {"Asia/Seoul", {std::chrono::hours(0) + std::chrono::minutes(0), std::chrono::hours(6) + std::chrono::minutes(30)}},          // KRX
+        {"Europe/London", {std::chrono::hours(8) + std::chrono::minutes(0), std::chrono::hours(16) + std::chrono::minutes(30)}},      // LSE
+        {"America/New_York", {std::chrono::hours(14) + std::chrono::minutes(30), std::chrono::hours(21) + std::chrono::minutes(0)}},  // Nasdaq, NYSE
+        {"Asia/Shanghai", {std::chrono::hours(1) + std::chrono::minutes(30), std::chrono::hours(7) + std::chrono::minutes(0)}},       // SSX, SZSE
+        {"Europe/Zurich", {std::chrono::hours(8) + std::chrono::minutes(0), std::chrono::hours(16) + std::chrono::minutes(30)}},      // SIX
+        {"Asia/Tokyo", {std::chrono::hours(0) + std::chrono::minutes(0), std::chrono::hours(6) + std::chrono::minutes(0)}},           // TSE
+        {"America/Toronto", {std::chrono::hours(14) + std::chrono::minutes(30), std::chrono::hours(21) + std::chrono::minutes(0)}}    // TSX
+};

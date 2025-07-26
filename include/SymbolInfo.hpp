@@ -17,5 +17,6 @@ struct SymbolInfo {
 
   SymbolInfo(const Symbol &symbol);
   SymbolInfo(const Symbol &symbol, const std::size_t &orderThreshold,
-             const std::chrono::milliseconds &durationThreshold);
+             const std::chrono::milliseconds &durationThreshold,
+            const std::string& localTimeZone, const TimeTuple& timeTuple);
 };
