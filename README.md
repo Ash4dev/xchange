@@ -8,7 +8,7 @@ A sophisticated C++ implementation of a financial exchange system featuring real
 
 ### Key Features
 - **Multi-Symbol Trading**: Support for trading multiple financial instruments simultaneously
-- **10 Order Types**: From simple Market orders to complex GoodTillDate and GoodAfterTime orders
+- **10 Order Types**: Comprehensive support for various order types including Market, Limit, GoodTillCancel, GoodTillDate, GoodForDay, GoodAfterTime, MarketOnOpen, MarketOnClose, ImmediateOrCancel, FillOrKill, and AllOrNone
 - **Smart Order Preprocessing**: Intelligent order queue management with configurable thresholds
 - **Priority-Based Matching**: Price-time priority for fair and efficient order execution
 - **Participant Management**: Track multiple participants with portfolios and trade history
@@ -151,7 +151,7 @@ AllOrNone (lowest priority)
 **Configuration**:
 - `MAX_PENDING_ORDERS_THRESHOLD`: Trigger flush when queue exceeds this count
 - `MAX_PENDING_DURATION`: Flush interval in milliseconds
-- Holiday calendar with 15 Indian market holidays
+- Holiday calendar with Indian market holidays for 2025
 - Trading hours validation (configurable per symbol)
 
 ### 5. **Level** (Price Level)
@@ -284,11 +284,12 @@ Flow:
 
 ## 🎨 Key C++ Features Utilized
 
-### Modern C++23 Features
+### Modern C++ Features
 1. **`#pragma once`**: Modern header guard replacing traditional `#ifndef` guards
-2. **`std::chrono`**: Comprehensive time handling with `system_clock::time_point`
-3. **`constexpr`**: Compile-time holiday array in PreProcessor
-4. **Range-based loops**: Used throughout for container iteration
+2. **`std::chrono`**: Comprehensive time handling with `system_clock::time_point` (C++11)
+3. **`constexpr`**: Compile-time holiday array in PreProcessor (C++11)
+4. **Range-based loops**: Used throughout for container iteration (C++11)
+5. **C++23 Standard**: Project is compiled with `-std=c++23` flag for latest language features
 
 ### Smart Pointers & Memory Management
 ```cpp
@@ -533,7 +534,7 @@ xchange/
 ## 🛠️ Building and Testing
 
 ### Prerequisites
-- **Compiler**: g++ with C++23 support (GCC 11+ or Clang 14+)
+- **Compiler**: g++ with C++23 support (GCC 12+ or Clang 15+ recommended)
 - **Build System**: GNU Make
 - **Testing**: Google Test (GTest) framework
 
