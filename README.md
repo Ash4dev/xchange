@@ -1,6 +1,12 @@
-# Xchange - High-Performance Order Matching Engine
+# Xchange - Toy Order Matching Engine
 
-A sophisticated C++ implementation of a financial exchange system featuring real-time order matching, comprehensive order type support, and intelligent order preprocessing. Built with modern C++23 features for optimal performance and type safety.
+## Note before you begin:
+- This is my first ever software project. I literally had no idea about software development and C++ in particular. I admit there is a lot of scope for improvement. 
+- I have learned a lot more stuff along the way(OOPS, C++). I plan to improve this project further. Kindly suggest ways for the same if something pops up in your head.
+
+### DISCLAIMER: The README.md for this project has been generated using Copilot Agent. However, all of the code is based on me trying to figure out stuff on the fly.
+
+A wanna-be sophisticated C++ implementation of a financial exchange system featuring real-time order matching, comprehensive order type support, and  order preprocessing. Built with modern C++17 features for attempt at optimal performance and type safety.
 
 ## 🎯 Project Overview
 
@@ -9,7 +15,7 @@ A sophisticated C++ implementation of a financial exchange system featuring real
 ### Key Features
 - **Multi-Symbol Trading**: Support for trading multiple financial instruments simultaneously
 - **10 Order Types**: Comprehensive support for various order types including Market, Limit, GoodTillCancel, GoodTillDate, GoodForDay, GoodAfterTime, MarketOnOpen, MarketOnClose, ImmediateOrCancel, FillOrKill, and AllOrNone
-- **Smart Order Preprocessing**: Intelligent order queue management with configurable thresholds
+- **Smart Order Preprocessing**:  order queue management with configurable thresholds
 - **Priority-Based Matching**: Price-time priority for fair and efficient order execution
 - **Participant Management**: Track multiple participants with portfolios and trade history
 - **Time Zone Support**: Configurable time zones with trading hours validation
@@ -52,7 +58,7 @@ The system is organized into a layered architecture with clear separation of con
                     │                                      │
          ┌──────────▼──────────┐                ┌─────────▼────────┐
          │   Order             │                │   Level          │
-         │   • Order Details   │                │   • Price Level  │
+         │   • Order Details   │◄───────────────│   • Price Level  │
          │   • Time Attributes │                │   • Order Queue  │
          │   • Status          │                │   • Quantity     │
          └─────────────────────┘                └──────────┬───────┘
@@ -125,7 +131,7 @@ The core matching engine that maintains price levels and executes trades.
 ### 4. **PreProcessor** (Order Queue Manager)
 **File**: `include/Preprocess.hpp`, `src/PreProcess.cpp`
 
-Intelligent order queue that validates and schedules orders before they enter the OrderBook.
+ order queue that validates and schedules orders before they enter the OrderBook.
 
 **Key Responsibilities**:
 - Buffer orders and validate activation/deactivation times
@@ -713,7 +719,7 @@ This project demonstrates:
 
 ## 📄 License
 
-*Add your license information here*
+MIT
 
 ---
 
@@ -725,6 +731,12 @@ This project demonstrates:
 
 ## 🙏 Acknowledgments
 
-- Financial order book algorithms and market microstructure concepts
-- Modern C++ community for best practices and patterns
-- Google Test framework for robust testing infrastructure
+- [Coding Jesus Orderbook Series](https://www.youtube.com/playlist?list=PLIkrF4j3_p-2C5VuzbBxpBsFzh0qqXtgm) for the idea
+- [LearnCPP](https://www.learncpp.com/) for a beginner friendly guide to C++
+- [CPPReference](https://cppreference.com/) for crisp and clear reference
+- [Mike Shah](https://www.youtube.com/@MikeShah) for the missing parts
+- [CppNuts](https://www.youtube.com/@CppNuts) for the missing parts
+- [Build systems](https://www.youtube.com/watch?v=2s75npa5IIY) "make"ing it
+- [GDB](https://www.youtube.com/watch?v=mfmXcbiRs0E) fixing bugs left and right
+- [Google Test](https://github.com/google/googletest) framework for robust testing infrastructure
+
