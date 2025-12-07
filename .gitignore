@@ -3,3 +3,10 @@ include/PreprocessOld.hpp
 src/PreprocessOld.cpp
 .cache/
 .vscode/
+
+# Build artifacts
+obj/
+bin/
+*.o
+tests/helper.o
+tests/testHealth
